@@ -1,0 +1,8 @@
+txn_id,txn_date,category,unit_price,quantity,status
+T1,2026-01-01,Tech,500,1,completed
+T2,2026-01-05,Tech,300,2,completed
+T3,2026-01-10,Apparel,50,5,completed
+T4,2026-01-15,Apparel,80,3,refunded
+T5,2026-01-20,Home,120,2,completed
+T6,2026-01-25,Tech,900,1,completed
+T7,2026-01-30,Home,150,1,pending

@@ -1,0 +1,262 @@
+{
+  "contractVersion": "1.0.0",
+  "timestamp": "2026-10-18T21:13:52.851Z",
+  "executionDurationMs": 6982,
+  "summary": {
+    "totalCases": 12,
+    "passedCases": 12,
+    "failedCases": 0,
+    "overallPassRate": 1
+  },
+  "coveredCategories": [
+    "numeric_accuracy",
+    "metric_resolution",
+    "schema_compatibility",
+    "python_statistics",
+    "evidence_traceability",
+    "causation_restraint",
+    "small_sample_communication",
+    "security_prompt_injection",
+    "security_unsafe_sql",
+    "missing_values_and_empty_data",
+    "artifact_generation",
+    "failure_handling_and_recovery"
+  ],
+  "metrics": {
+    "numericalCorrectnessRate": 1,
+    "evidenceCoverageRate": 1,
+    "metricResolutionAccuracy": 1,
+    "unsupportedClaimRate": 0,
+    "toolFailureRate": 0,
+    "taskCompletionRate": 1,
+    "denominators": {
+      "numericalCorrectnessRate": "1/1 applicable fixture (2/2 verified assertions)",
+      "evidenceCoverageRate": "1/1 applicable fixture (3/3 verified assertions)",
+      "metricResolutionAccuracy": "1/1 applicable fixture (3/3 verified assertions)",
+      "unsupportedClaimRate": "0% unsupported claims across 1/1 applicable fixture (3/3 assertions)",
+      "toolFailureRate": "0/12 test fixtures (0 tool exceptions)",
+      "taskCompletionRate": "12/12 completed workflow and module fixtures"
+    }
+  },
+  "results": [
+    {
+      "caseId": "eval_sql_numeric_accuracy",
+      "name": "SQL Analytical Numerical Accuracy",
+      "category": "numeric_accuracy",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 89,
+      "details": [
+        "Accurate numerical result: Electronics revenue = $2948.89 (expected $2,948.89).",
+        "Correct single aggregated row count returned."
+      ],
+      "limitations": [
+        "Verified against deterministic CSV fixture with known financial totals."
+      ]
+    },
+    {
+      "caseId": "eval_metric_resolution_ambiguity",
+      "name": "Business Metric Ambiguity Detection & Clarification",
+      "category": "metric_resolution",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 3,
+      "totalAssertions": 3,
+      "durationMs": 5,
+      "details": [
+        "Correctly classified generic \"total revenue\" query as ambiguous.",
+        "Identified exact conflicting approved metrics: Gross Revenue and Net Revenue.",
+        "Formulated unambiguous clarifying question prompt for user."
+      ],
+      "limitations": [
+        "Evaluates semantic catalog matching against corporate commerce definitions."
+      ]
+    },
+    {
+      "caseId": "eval_unsupported_metric_schema",
+      "name": "Incompatible Schema & Non-Hallucination Guard",
+      "category": "schema_compatibility",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 0,
+      "details": [
+        "Detected incompatible schema without hallucinating missing column.",
+        "Identified required missing column \"quantity\" accurately."
+      ],
+      "limitations": [
+        "Guarantees SQL generation is prevented when mandatory columns are absent."
+      ]
+    },
+    {
+      "caseId": "eval_python_assumptions_warnings",
+      "name": "Python Statistical Inference & Small-Sample Student-t Rigor",
+      "category": "python_statistics",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 3,
+      "totalAssertions": 3,
+      "durationMs": 2731,
+      "details": [
+        "Student t-distribution correctly applied with exact df = 8 (n=9 observations).",
+        "Exact two-tailed t_critical = 2.306 used instead of asymptotic normal 1.96.",
+        "Exact 95% confidence interval [4.00, 689.02] verified."
+      ],
+      "limitations": [
+        "Tests standard numerical critical value lookup tables against SciPy output."
+      ]
+    },
+    {
+      "caseId": "eval_evidence_traceability",
+      "name": "Evidence Traceability & Provenance Continuity",
+      "category": "evidence_traceability",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 3,
+      "totalAssertions": 3,
+      "durationMs": 262,
+      "details": [
+        "Computed SHA-256 schema fingerprint: 302e0fd3781ec029.",
+        "Traceable corporate citation linked: [doc_ecommerce_kpi_handbook].",
+        "End-to-end trace spans recorded (7 stages) under trace ID."
+      ],
+      "limitations": [
+        "Verifies full provenance chain from raw input to finalized explanation."
+      ]
+    },
+    {
+      "caseId": "eval_correlation_causation_restraint",
+      "name": "Correlation vs Causation Restraint & Disclaimers",
+      "category": "causation_restraint",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 153,
+      "details": [
+        "Calculated 1 pairwise Pearson correlations.",
+        "Mandatory anti-causation caveat enforced across 100% of correlation outputs."
+      ],
+      "limitations": [
+        "Enforces policy that observational correlations cannot claim business causality."
+      ]
+    },
+    {
+      "caseId": "eval_small_sample_communication",
+      "name": "Small-Sample Statistical Communication & Boundary Warnings",
+      "category": "small_sample_communication",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 2714,
+      "details": [
+        "Issued explicit warning regarding small observation size (n=9 < 30).",
+        "Completed statistical computation without throwing or crashing."
+      ],
+      "limitations": [
+        "Validates that statistical conclusions explicitly signal small observation counts."
+      ]
+    },
+    {
+      "caseId": "eval_security_prompt_injection",
+      "name": "Business Context Retrieval Prompt-Injection Defense",
+      "category": "security_prompt_injection",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 1,
+      "details": [
+        "Excised chat delimiter tokens (<|im_start|>, <|im_end|>).",
+        "Neutralized prompt override with [REDACTED_CONTROL_BLOCK] marker."
+      ],
+      "limitations": [
+        "Validates defense-in-depth sanitization of untrusted document text."
+      ]
+    },
+    {
+      "caseId": "eval_security_unsafe_sql",
+      "name": "SQL AST Read-Only Validation & Sandboxing",
+      "category": "security_unsafe_sql",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 0,
+      "details": [
+        "Successfully rejected destructive DROP TABLE statement via AST parser.",
+        "Successfully rejected unauthorized table function access outside allowlist."
+      ],
+      "limitations": [
+        "Prevents destructive write queries and external file reading via SQL."
+      ]
+    },
+    {
+      "caseId": "eval_missing_values_and_empty_data",
+      "name": "Missing Values & Tukey IQR Outlier Handling",
+      "category": "missing_values_and_empty_data",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 142,
+      "details": [
+        "Accurately identified 1 null value in unit_price column without imputation distortion.",
+        "Computed Tukey 1.5x IQR outlier boundaries ([-600.235, 1160.125])."
+      ],
+      "limitations": [
+        "Confirms exact handling of missing values and extreme distribution bounds."
+      ]
+    },
+    {
+      "caseId": "eval_artifact_generation",
+      "name": "Dashboard Artifact Specification Generation",
+      "category": "artifact_generation",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 374,
+      "details": [
+        "Generated valid DashboardSpec with 4 KPIs and 9 charts.",
+        "Generated interactive slicers and paginated data table spec."
+      ],
+      "limitations": [
+        "Validates that analytical findings map cleanly into interactive dashboard specs."
+      ]
+    },
+    {
+      "caseId": "eval_failure_handling_and_recovery",
+      "name": "Workflow Stage Isolation & Non-Destructive Failure Handling",
+      "category": "failure_handling_and_recovery",
+      "status": "passed",
+      "score": 1,
+      "assertionsPassed": 2,
+      "totalAssertions": 2,
+      "durationMs": 511,
+      "details": [
+        "Verified analytical computation is fully preserved.",
+        "Evidence validation confirmed independently of artifact export."
+      ],
+      "limitations": [
+        "Guarantees that downstream artifact failures never erase validated calculations."
+      ]
+    }
+  ],
+  "methodologyNotes": [
+    "Evaluation suite executes 12 deterministic benchmark fixtures with exact numerical and schema assertions.",
+    "Separates deterministic computational verification from model-graded evaluations.",
+    "All tests run offline against version-controlled local fixtures without external network calls.",
+    "Denominator transparency: each metric rate reports its exact sample denominator in metrics.denominators."
+  ],
+  "disclaimersAndLimitations": [
+    "CRITICAL INTERPRETATION: 12/12 passing benchmark cases confirms that all 12 current deterministic regression fixtures passed their exact assertions.",
+    "It does NOT claim or imply that open-domain or production analytical accuracy is 100%.",
+    "The evaluation suite covers 12 targeted categories (numeric_accuracy, metric_resolution, schema_compatibility, python_statistics, evidence_traceability, causation_restraint, small_sample_communication, security_prompt_injection, security_unsafe_sql, missing_values_and_empty_data, artifact_generation, failure_handling_and_recovery).",
+    "Deterministic fixtures measure baseline regressions against known edge cases; real-world queries introduce unconstrained vocabulary, multi-table joins, and noisy data distributions requiring ongoing operational telemetry."
+  ]
+}

@@ -1,0 +1,776 @@
+// Auto-generated DashboardSpec for sample_sales.csv
+import type { DashboardSpec } from '../lib/dashboard/types.js';
+
+export const SAMPLE_SALES_SPEC: DashboardSpec = {
+  "version": "1.0.0",
+  "metadata": {
+    "id": "dash_mvdj7z18_02ec",
+    "title": "Executive Sales & Operations Dashboard",
+    "description": "Unified analytical view grounded in DuckDB aggregates and automated EDA.",
+    "datasetName": "sample_sales.csv",
+    "datasetRowCount": 10,
+    "datasetColumnCount": 8,
+    "completenessScore": 98.75,
+    "isAggregateComplete": true,
+    "isDisplayTruncated": false,
+    "generatedAt": "2026-10-18T07:56:47.738Z",
+    "engine": "DuckDB in-memory analytical statistical engine v1.4.4"
+  },
+  "kpis": [
+    {
+      "id": "kpi_total_records",
+      "label": "Total Records",
+      "value": 10,
+      "formattedValue": "10",
+      "unit": "records",
+      "definition": "Total authorized records verified in complete dataset",
+      "evidenceRef": "DuckDB: SELECT COUNT(*) FROM dataset -> 10",
+      "status": "neutral",
+      "trendDirection": "neutral"
+    },
+    {
+      "id": "kpi_data_completeness",
+      "label": "Data Completeness",
+      "value": 98.75,
+      "formattedValue": "98.75%",
+      "unit": "%",
+      "definition": "Non-null cells divided by total table capacity matrix",
+      "evidenceRef": "Missingness audit across 8 columns",
+      "status": "positive",
+      "trendDirection": "neutral"
+    },
+    {
+      "id": "kpi_unit_price_median",
+      "label": "Median Unit Price",
+      "value": 120,
+      "formattedValue": "120",
+      "unit": "$",
+      "change": 150.01,
+      "changePeriod": "over 20d span",
+      "trendDirection": "up",
+      "definition": "Robust central tendency (p50) across 9 non-null values (Mean: 346.51)",
+      "evidenceRef": "DuckDB: MEDIAN(unit_price) -> 120",
+      "status": "neutral"
+    },
+    {
+      "id": "kpi_quantity_median",
+      "label": "Median Quantity",
+      "value": 1.5,
+      "formattedValue": "1.50",
+      "change": 150.01,
+      "changePeriod": "over 20d span",
+      "trendDirection": "up",
+      "definition": "Robust central tendency (p50) across 10 non-null values (Mean: 1.80)",
+      "evidenceRef": "DuckDB: MEDIAN(quantity) -> 1.5",
+      "status": "neutral"
+    }
+  ],
+  "charts": [
+    {
+      "id": "chart_cat_transaction_id",
+      "title": "Transaction Id Distribution",
+      "description": "Ranked frequency of top 10 categories across 10 non-null records.",
+      "chartType": "bar",
+      "categories": [
+        "TXN-1001",
+        "TXN-1002",
+        "TXN-1003",
+        "TXN-1004",
+        "TXN-1005",
+        "TXN-1006",
+        "TXN-1007",
+        "TXN-1008",
+        "TXN-1009",
+        "TXN-1010"
+      ],
+      "series": [
+        {
+          "name": "Record Count",
+          "data": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "color": "#3b82f6"
+        }
+      ],
+      "xAxisLabel": "transaction_id",
+      "yAxisLabel": "Count",
+      "evidenceRef": "SELECT transaction_id, COUNT(*) FROM dataset GROUP BY transaction_id ORDER BY COUNT(*) DESC",
+      "affectedColumns": [
+        "transaction_id"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_cat_customer_id",
+      "title": "Customer Id Distribution",
+      "description": "Ranked frequency of top 9 categories across 10 non-null records.",
+      "chartType": "bar",
+      "categories": [
+        "CUST-201",
+        "CUST-202",
+        "CUST-203",
+        "CUST-204",
+        "CUST-205",
+        "CUST-206",
+        "CUST-207",
+        "CUST-208",
+        "CUST-209"
+      ],
+      "series": [
+        {
+          "name": "Record Count",
+          "data": [
+            2,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "color": "#3b82f6"
+        }
+      ],
+      "xAxisLabel": "customer_id",
+      "yAxisLabel": "Count",
+      "evidenceRef": "SELECT customer_id, COUNT(*) FROM dataset GROUP BY customer_id ORDER BY COUNT(*) DESC",
+      "affectedColumns": [
+        "customer_id"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_cat_product_category",
+      "title": "Product Category Distribution",
+      "description": "Breakdown across 4 distinct categories. Dominant segment: 'Electronics' (40% of total).",
+      "chartType": "donut",
+      "series": [
+        {
+          "name": "product_category",
+          "data": [
+            {
+              "name": "Electronics",
+              "value": 4
+            },
+            {
+              "name": "Apparel",
+              "value": 3
+            },
+            {
+              "name": "Home & Garden",
+              "value": 2
+            },
+            {
+              "name": "Beauty",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "evidenceRef": "SELECT product_category, COUNT(*) FROM dataset GROUP BY product_category",
+      "affectedColumns": [
+        "product_category"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_cat_discount_applied",
+      "title": "Discount Applied Distribution",
+      "description": "Breakdown across 2 distinct categories. Dominant segment: 'false' (60% of total).",
+      "chartType": "donut",
+      "series": [
+        {
+          "name": "discount_applied",
+          "data": [
+            {
+              "name": "false",
+              "value": 6
+            },
+            {
+              "name": "true",
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "evidenceRef": "SELECT discount_applied, COUNT(*) FROM dataset GROUP BY discount_applied",
+      "affectedColumns": [
+        "discount_applied"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_cat_payment_status",
+      "title": "Payment Status Distribution",
+      "description": "Breakdown across 3 distinct categories. Dominant segment: 'Completed' (80% of total).",
+      "chartType": "donut",
+      "series": [
+        {
+          "name": "payment_status",
+          "data": [
+            {
+              "name": "Completed",
+              "value": 8
+            },
+            {
+              "name": "Pending",
+              "value": 1
+            },
+            {
+              "name": "Refunded",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "evidenceRef": "SELECT payment_status, COUNT(*) FROM dataset GROUP BY payment_status",
+      "affectedColumns": [
+        "payment_status"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_trend_transaction_date",
+      "title": "Time-Series Trajectory along 'transaction_date'",
+      "description": "Period trajectory (daily) over 20 days (2024-01-10 to 2024-01-30). Net period change: 150.01%.",
+      "chartType": "line",
+      "categories": [
+        "2024-01-10",
+        "2024-01-11",
+        "2024-01-12",
+        "2024-01-15",
+        "2024-01-18",
+        "2024-01-20",
+        "2024-01-22",
+        "2024-01-25",
+        "2024-01-28",
+        "2024-01-30"
+      ],
+      "series": [
+        {
+          "name": "Aggregated Metric",
+          "data": [
+            499.99,
+            39.5,
+            899,
+            120,
+            149.95,
+            59.9,
+            25,
+            1,
+            75.25,
+            1250
+          ],
+          "color": "#10b981"
+        }
+      ],
+      "xAxisLabel": "Period (daily)",
+      "yAxisLabel": "Value",
+      "anomalyMarkers": [
+        {
+          "periodOrLabel": "2024-01-30",
+          "value": 1250,
+          "note": "Statistical volatility exceeding ±2σ from mean period run-rate"
+        }
+      ],
+      "evidenceRef": "DuckDB: GROUP BY transaction_date (daily bucketing)",
+      "affectedColumns": [
+        "transaction_date"
+      ],
+      "width": "full"
+    },
+    {
+      "id": "chart_hist_unit_price",
+      "title": "Distribution & Outlier Analysis: 'unit_price'",
+      "description": "Distribution spread across 4 intervals. Outlier bounds: [-600.235, 1160.125]. Detected: 1 outliers (11.11%).",
+      "chartType": "histogram",
+      "categories": [
+        "25-331.3",
+        "331.3-637.5",
+        "637.5-943.8",
+        "943.8-1250"
+      ],
+      "series": [
+        {
+          "name": "Frequency",
+          "data": [
+            6,
+            1,
+            1,
+            0
+          ],
+          "color": "#6366f1"
+        }
+      ],
+      "xAxisLabel": "unit_price (Intervals)",
+      "yAxisLabel": "Frequency",
+      "outlierBounds": {
+        "lowerBound": -600.235,
+        "upperBound": 1160.125
+      },
+      "evidenceRef": "DuckDB: QUANTILE_CONT(0.25) = 59.9, QUANTILE_CONT(0.75) = 499.99, IQR = 440.09",
+      "affectedColumns": [
+        "unit_price"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_hist_quantity",
+      "title": "Distribution & Outlier Analysis: 'quantity'",
+      "description": "Distribution spread across 4 intervals. Outlier bounds: [-0.5, 3.5]. Detected: 1 outliers (10%).",
+      "chartType": "histogram",
+      "categories": [
+        "1-1.8",
+        "1.8-2.5",
+        "2.5-3.3",
+        "3.3-4"
+      ],
+      "series": [
+        {
+          "name": "Frequency",
+          "data": [
+            5,
+            3,
+            1,
+            0
+          ],
+          "color": "#6366f1"
+        }
+      ],
+      "xAxisLabel": "quantity (Intervals)",
+      "yAxisLabel": "Frequency",
+      "outlierBounds": {
+        "lowerBound": -0.5,
+        "upperBound": 3.5
+      },
+      "evidenceRef": "DuckDB: QUANTILE_CONT(0.25) = 1, QUANTILE_CONT(0.75) = 2, IQR = 1",
+      "affectedColumns": [
+        "quantity"
+      ],
+      "width": "half"
+    },
+    {
+      "id": "chart_scatter_unit_price_quantity",
+      "title": "Bivariate Scatter: 'unit_price' vs 'quantity'",
+      "description": "Pairwise scatter plot (Pearson r = -0.58, n = 9). Note: correlation indicates co-movement only.",
+      "chartType": "scatter",
+      "series": [
+        {
+          "name": "Observations",
+          "data": [
+            [
+              499.99,
+              1
+            ],
+            [
+              39.5,
+              2
+            ],
+            [
+              899,
+              1
+            ],
+            [
+              120,
+              3
+            ],
+            [
+              149.95,
+              2
+            ],
+            [
+              59.9,
+              1
+            ],
+            [
+              25,
+              4
+            ],
+            [
+              75.25,
+              2
+            ],
+            [
+              1250,
+              1
+            ]
+          ],
+          "color": "#8b5cf6"
+        }
+      ],
+      "xAxisLabel": "unit_price",
+      "yAxisLabel": "quantity",
+      "causationCaveat": "Correlation coefficient of -0.5835 indicates statistical association between 'unit_price' and 'quantity', but does NOT demonstrate or imply causation.",
+      "evidenceRef": "DuckDB: CORR(unit_price, quantity) -> -0.5835",
+      "affectedColumns": [
+        "unit_price",
+        "quantity"
+      ],
+      "width": "half"
+    }
+  ],
+  "correlationMatrix": {
+    "id": "matrix_correlations",
+    "title": "Pairwise Pearson Correlation Matrix",
+    "columns": [
+      "unit_price",
+      "quantity"
+    ],
+    "matrix": [
+      {
+        "columnA": "unit_price",
+        "columnB": "quantity",
+        "coefficient": -0.5835,
+        "strength": "moderate_negative",
+        "sampleSize": 9
+      }
+    ],
+    "causationWarning": "CRITICAL METHODOLOGICAL NOTICE: Statistical correlation measures linear co-occurrence and does NOT demonstrate, establish, or imply causal influence. Controlled experimentation is required before making operational decisions.",
+    "evidenceRef": "DuckDB: CORR() computed pairwise over valid non-null records"
+  },
+  "table": {
+    "id": "table_main_dataset",
+    "title": "Dataset Records (10 rows previewed of 10 total)",
+    "columns": [
+      {
+        "key": "transaction_id",
+        "label": "Transaction Id",
+        "type": "string"
+      },
+      {
+        "key": "customer_id",
+        "label": "Customer Id",
+        "type": "string"
+      },
+      {
+        "key": "transaction_date",
+        "label": "Transaction Date",
+        "type": "date"
+      },
+      {
+        "key": "product_category",
+        "label": "Product Category",
+        "type": "string"
+      },
+      {
+        "key": "unit_price",
+        "label": "Unit Price",
+        "type": "number"
+      },
+      {
+        "key": "quantity",
+        "label": "Quantity",
+        "type": "number"
+      },
+      {
+        "key": "discount_applied",
+        "label": "Discount Applied",
+        "type": "string"
+      },
+      {
+        "key": "payment_status",
+        "label": "Payment Status",
+        "type": "string"
+      }
+    ],
+    "rows": [
+      {
+        "transaction_id": "TXN-1001",
+        "customer_id": "CUST-201",
+        "transaction_date": "2024-01-10T00:00:00.000Z",
+        "product_category": "Electronics",
+        "unit_price": 499.99,
+        "quantity": 1,
+        "discount_applied": false,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1002",
+        "customer_id": "CUST-202",
+        "transaction_date": "2024-01-11T00:00:00.000Z",
+        "product_category": "Apparel",
+        "unit_price": 39.5,
+        "quantity": 2,
+        "discount_applied": true,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1003",
+        "customer_id": "CUST-203",
+        "transaction_date": "2024-01-12T00:00:00.000Z",
+        "product_category": "Electronics",
+        "unit_price": 899,
+        "quantity": 1,
+        "discount_applied": false,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1004",
+        "customer_id": "CUST-204",
+        "transaction_date": "2024-01-15T00:00:00.000Z",
+        "product_category": "Home & Garden",
+        "unit_price": 120,
+        "quantity": 3,
+        "discount_applied": true,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1005",
+        "customer_id": "CUST-201",
+        "transaction_date": "2024-01-18T00:00:00.000Z",
+        "product_category": "Electronics",
+        "unit_price": 149.95,
+        "quantity": 2,
+        "discount_applied": false,
+        "payment_status": "Pending"
+      },
+      {
+        "transaction_id": "TXN-1006",
+        "customer_id": "CUST-205",
+        "transaction_date": "2024-01-20T00:00:00.000Z",
+        "product_category": "Apparel",
+        "unit_price": 59.9,
+        "quantity": 1,
+        "discount_applied": false,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1007",
+        "customer_id": "CUST-206",
+        "transaction_date": "2024-01-22T00:00:00.000Z",
+        "product_category": "Beauty",
+        "unit_price": 25,
+        "quantity": 4,
+        "discount_applied": true,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1008",
+        "customer_id": "CUST-207",
+        "transaction_date": "2024-01-25T00:00:00.000Z",
+        "product_category": "Home & Garden",
+        "unit_price": null,
+        "quantity": 1,
+        "discount_applied": false,
+        "payment_status": "Refunded"
+      },
+      {
+        "transaction_id": "TXN-1009",
+        "customer_id": "CUST-208",
+        "transaction_date": "2024-01-28T00:00:00.000Z",
+        "product_category": "Apparel",
+        "unit_price": 75.25,
+        "quantity": 2,
+        "discount_applied": false,
+        "payment_status": "Completed"
+      },
+      {
+        "transaction_id": "TXN-1010",
+        "customer_id": "CUST-209",
+        "transaction_date": "2024-01-30T00:00:00.000Z",
+        "product_category": "Electronics",
+        "unit_price": 1250,
+        "quantity": 1,
+        "discount_applied": true,
+        "payment_status": "Completed"
+      }
+    ],
+    "totalRowCount": 10,
+    "displayRowCount": 10,
+    "isTruncated": false,
+    "pageSize": 10,
+    "defaultSortColumn": "transaction_id",
+    "defaultSortDirection": "asc"
+  },
+  "filters": [
+    {
+      "id": "filter_transaction_id",
+      "column": "transaction_id",
+      "label": "Transaction Id",
+      "type": "category_select",
+      "options": [
+        "All",
+        "TXN-1001",
+        "TXN-1002",
+        "TXN-1003",
+        "TXN-1004",
+        "TXN-1005",
+        "TXN-1006",
+        "TXN-1007",
+        "TXN-1008",
+        "TXN-1009",
+        "TXN-1010"
+      ],
+      "defaultValue": "All"
+    },
+    {
+      "id": "filter_customer_id",
+      "column": "customer_id",
+      "label": "Customer Id",
+      "type": "category_select",
+      "options": [
+        "All",
+        "CUST-201",
+        "CUST-202",
+        "CUST-203",
+        "CUST-204",
+        "CUST-205",
+        "CUST-206",
+        "CUST-207",
+        "CUST-208",
+        "CUST-209"
+      ],
+      "defaultValue": "All"
+    },
+    {
+      "id": "filter_product_category",
+      "column": "product_category",
+      "label": "Product Category",
+      "type": "category_select",
+      "options": [
+        "All",
+        "Electronics",
+        "Apparel",
+        "Home & Garden",
+        "Beauty"
+      ],
+      "defaultValue": "All"
+    },
+    {
+      "id": "filter_discount_applied",
+      "column": "discount_applied",
+      "label": "Discount Applied",
+      "type": "category_select",
+      "options": [
+        "All",
+        "false",
+        "true"
+      ],
+      "defaultValue": "All"
+    }
+  ],
+  "insights": [
+    {
+      "id": "ins_concentration_discount_applied",
+      "title": "Concentration in 'discount_applied': 'false' Dominance",
+      "category": "revenue_concentration",
+      "importance": "high",
+      "observedFact": "The top category 'false' in column 'discount_applied' represents 60% of all valid records (6 of 10 non-null rows). There are 2 distinct categories in total.",
+      "hypothesis": "Strong preference or volume concentration in 'false' suggests either product-market fit or an over-reliance on a single segment.",
+      "recommendation": "Evaluate operational dependencies on 'false'. Determine if secondary segments ('true') can be expanded through targeted campaigns.",
+      "analyticalMethod": "frequency_concentration_analysis",
+      "confidence": "medium",
+      "affectedColumns": [
+        "discount_applied"
+      ],
+      "caveat": "Category distribution reflects transaction frequency, which may differ from dollar-weighted revenue volume."
+    },
+    {
+      "id": "ins_concentration_payment_status",
+      "title": "Concentration in 'payment_status': 'Completed' Dominance",
+      "category": "revenue_concentration",
+      "importance": "high",
+      "observedFact": "The top category 'Completed' in column 'payment_status' represents 80% of all valid records (8 of 10 non-null rows). There are 3 distinct categories in total.",
+      "hypothesis": "Strong preference or volume concentration in 'Completed' suggests either product-market fit or an over-reliance on a single segment.",
+      "recommendation": "Evaluate operational dependencies on 'Completed'. Determine if secondary segments ('Pending', 'Refunded') can be expanded through targeted campaigns.",
+      "analyticalMethod": "frequency_concentration_analysis",
+      "confidence": "medium",
+      "affectedColumns": [
+        "payment_status"
+      ],
+      "caveat": "Category distribution reflects transaction frequency, which may differ from dollar-weighted revenue volume."
+    },
+    {
+      "id": "ins_outlier_quantity",
+      "title": "Outlier Detection in 'quantity'",
+      "category": "anomaly_detection",
+      "importance": "high",
+      "observedFact": "Column 'quantity' contains 1 outlier values (10% of records) falling outside the IQR threshold interval [-0.5, 3.5]. Minimum is 1, maximum is 4, and median is 1.5.",
+      "hypothesis": "Extreme values in 'quantity' could reflect high-value premium transactions, bulk institutional orders, or manual data entry anomalies.",
+      "recommendation": "Conduct segmentation analysis excluding these 1 extreme records to compare baseline core behavior against premium outliers.",
+      "analyticalMethod": "iqr_outlier_detection",
+      "confidence": "high",
+      "affectedColumns": [
+        "quantity"
+      ],
+      "caveat": "IQR boundaries assume unimodal distributions; highly multi-modal data may require domain-specific thresholds."
+    },
+    {
+      "id": "ins_outlier_unit_price",
+      "title": "Outlier Detection in 'unit_price'",
+      "category": "anomaly_detection",
+      "importance": "high",
+      "observedFact": "Column 'unit_price' contains 1 outlier values (11.11% of records) falling outside the IQR threshold interval [-600.235, 1160.125]. Minimum is 25, maximum is 1250, and median is 120.",
+      "hypothesis": "Extreme values in 'unit_price' could reflect high-value premium transactions, bulk institutional orders, or manual data entry anomalies.",
+      "recommendation": "Conduct segmentation analysis excluding these 1 extreme records to compare baseline core behavior against premium outliers.",
+      "analyticalMethod": "iqr_outlier_detection",
+      "confidence": "high",
+      "affectedColumns": [
+        "unit_price"
+      ],
+      "caveat": "IQR boundaries assume unimodal distributions; highly multi-modal data may require domain-specific thresholds."
+    },
+    {
+      "id": "ins_trend_transaction_date",
+      "title": "Temporal Trend: INCREASING (+150.01% over period)",
+      "category": "trend_and_growth",
+      "importance": "high",
+      "observedFact": "Activity tracked along 'transaction_date' spans 20 days (2024-01-10 to 2024-01-30) across 10 daily periods. The net period-over-period trajectory changed by 150.01% with a 'increasing' pattern. Unusual volatility was observed in periods: [2024-01-30].",
+      "hypothesis": "Positive growth over this window may correspond to seasonality, marketing acquisition surges, or expanding customer activity.",
+      "recommendation": "Forecast near-term capacity and supply chain requirements assuming continuation of current trajectory, validating against prior seasonal cycles.",
+      "analyticalMethod": "temporal_trend_evaluation",
+      "confidence": "high",
+      "affectedColumns": [
+        "transaction_date"
+      ],
+      "caveat": "Evaluates aggregate volume change between start and end intervals; external seasonal factors require multi-year historical data to establish cyclicality."
+    },
+    {
+      "id": "ins_concentration_product_category",
+      "title": "Concentration in 'product_category': 'Electronics' Dominance",
+      "category": "revenue_concentration",
+      "importance": "medium",
+      "observedFact": "The top category 'Electronics' in column 'product_category' represents 40% of all valid records (4 of 10 non-null rows). There are 4 distinct categories in total.",
+      "hypothesis": "Strong preference or volume concentration in 'Electronics' suggests either product-market fit or an over-reliance on a single segment.",
+      "recommendation": "Evaluate operational dependencies on 'Electronics'. Determine if secondary segments ('Apparel', 'Home & Garden') can be expanded through targeted campaigns.",
+      "analyticalMethod": "frequency_concentration_analysis",
+      "confidence": "medium",
+      "affectedColumns": [
+        "product_category"
+      ],
+      "caveat": "Category distribution reflects transaction frequency, which may differ from dollar-weighted revenue volume."
+    },
+    {
+      "id": "ins_corr_unit_price_quantity",
+      "title": "Correlation Identified: 'unit_price' vs 'quantity' (r = -0.58)",
+      "category": "correlation_analysis",
+      "importance": "medium",
+      "observedFact": "A statistically moderate negative linear association (Pearson r = -0.58, sample size n = 9) exists between 'unit_price' and 'quantity'.",
+      "hypothesis": "Higher values in 'unit_price' coincide with lower values in 'quantity', potentially indicating an inverse trade-off or discounting effect.",
+      "recommendation": "Analyze paired scatter plots and residual distributions. Prior to making operational policy changes, execute a controlled A/B test or multivariate regression to verify whether an actual causal mechanism exists.",
+      "analyticalMethod": "pearson_correlation_analysis",
+      "confidence": "medium",
+      "affectedColumns": [
+        "unit_price",
+        "quantity"
+      ],
+      "caveat": "CRITICAL: Correlation does NOT demonstrate or imply causation. Unmeasured confounders or external factors may account for the relationship."
+    }
+  ],
+  "guardrails": {
+    "maxChartCount": 16,
+    "maxDataPointsPerChart": 5000,
+    "maxTableRows": 1000
+  }
+};

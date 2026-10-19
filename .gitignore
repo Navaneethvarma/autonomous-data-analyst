@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build and distribution output
+dist/
+build/
+.mastra/
+
+# Environment files and credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Test and coverage output
+coverage/
+*.lcov
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db
