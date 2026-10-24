@@ -1,72 +1,24 @@
-import path from 'node:path';
-import fs from 'node:fs';
 import {
   WorkflowRequest,
   WorkflowResult,
   AnalysisPlan,
 } from './types.js';
 import { WorkflowTracer, computeSchemaFingerprint } from '../observability/tracer.js';
-import { FailureCategory } from '../observability/types.js';
 import { profileDataset } from '../dataset/profiler.js';
 import { defaultMetricResolver } from '../semantic/resolver.js';
 import { defaultContextRetriever } from '../semantic/retrieval.js';
 import { formulateAnalysisPlan } from '../dataset/plan.js';
-import { executeAnalyticalQuery, QueryTimeoutError } from '../analytics/duckdb-engine.js';
-import { SqlSecurityError, SqlSyntaxError } from '../analytics/sql-validator.js';
-import { executeSandboxedPython } from '../python/sandbox-runner.js';
 import { validateAnalysisResult } from '../dataset/validation.js';
 import { runAutomatedEda } from '../analytics/eda-engine.js';
 import { generateBusinessInsights } from '../analytics/insight-generator.js';
-import { generateDashboardSpec } from '../dashboard/generator.js';
-import { generateReportSpec } from '../report/generator.js';
-import { renderReportHtml } from '../report/html-renderer.js';
-import { exportPdfFromHtml } from '../report/pdf-generator.js';
+import { isTransientError } from './error-classifier.js';
+import {
+  executeComputationWithRetries,
+  executeArtifactGeneration,
+  formatWorkflowExplanation,
+} from './stage-execution.js';
 
-/**
- * Determines if an execution error is transient (e.g. timeout, temporary resource lock)
- * or permanent (syntax error, security/authorization violation, schema defect).
- */
-export function isTransientError(err: unknown): boolean {
-  if (!err) return false;
-  if (err instanceof SqlSecurityError || err instanceof SqlSyntaxError) {
-    return false;
-  }
-  const msg = err instanceof Error ? err.message : String(err);
-  const lower = msg.toLowerCase();
-
-  // Permanent safety, syntax, schema, and authorization errors must NEVER be retried
-  if (
-    lower.includes('prohibited') ||
-    lower.includes('unauthorized') ||
-    lower.includes('security') ||
-    lower.includes('syntax') ||
-    lower.includes('binder error') ||
-    lower.includes('catalog error') ||
-    lower.includes('not found') ||
-    lower.includes('does not exist') ||
-    lower.includes('access denied') ||
-    lower.includes('path traversal') ||
-    lower.includes('disallowed') ||
-    lower.includes('validation failed') ||
-    lower.includes('execution policy rejection')
-  ) {
-    return false;
-  }
-
-  // Transient errors eligible for bounded retries
-  if (
-    err instanceof QueryTimeoutError ||
-    lower.includes('timed out') ||
-    lower.includes('timeout') ||
-    lower.includes('etimedout') ||
-    lower.includes('econnreset') ||
-    lower.includes('temporarily unavailable')
-  ) {
-    return true;
-  }
-
-  return false;
-}
+export { isTransientError };
 
 export class AnalyticalWorkflowOrchestrator {
   /**
@@ -111,9 +63,7 @@ export class AnalyticalWorkflowOrchestrator {
     let status: WorkflowResult['status'] = 'completed';
 
     try {
-      // =======================================================================
       // STAGE 1: Dataset & Schema Inspection
-      // =======================================================================
       const spanInspect = tracer.startSpan('inspection', 'profileDataset', { datasetPath: request.datasetPath });
       let profile;
       try {
@@ -167,9 +117,7 @@ export class AnalyticalWorkflowOrchestrator {
         };
       }
 
-      // =======================================================================
       // STAGE 2: Business Metric & Context Resolution
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('semantic_resolution', 25, 'Resolving business metrics and context...');
       const spanSemantic = tracer.startSpan('semantic_resolution', 'resolveBusinessMetricTool', {
@@ -266,9 +214,7 @@ export class AnalyticalWorkflowOrchestrator {
         citationsCount: context.citations.length,
       });
 
-      // =======================================================================
       // STAGE 3: Analytical Planning
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('planning', 40, 'Formulating analysis execution plan...');
       const spanPlan = tracer.startSpan('planning', 'formulateAnalysisPlanTool');
@@ -296,133 +242,30 @@ export class AnalyticalWorkflowOrchestrator {
         tracer.endSpan(spanPlan, 'warning', 'none', { reason: planErr.message });
       }
 
-      // =======================================================================
       // STAGE 4: Analytical Execution (DuckDB or Sandboxed Python) with Bounded Retries
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('execution', 55, 'Executing analytical query in DuckDB / Python...');
-      const isPythonAnalysis =
-        request.executionEngine === 'python' ||
-        request.userQuery.toLowerCase().includes('distribution moment') ||
-        request.userQuery.toLowerCase().includes('confidence interval') ||
-        request.userQuery.toLowerCase().includes('welch') ||
-        request.userQuery.toLowerCase().includes('regression');
-
       const spanExec = tracer.startSpan(
         'execution',
-        isPythonAnalysis ? 'runPythonAnalysisTool' : 'executeAnalyticalQueryTool'
+        request.executionEngine === 'python' ? 'runPythonAnalysisTool' : 'executeAnalyticalQueryTool'
       );
 
-      let executionSuccess = false;
-      const retryPolicy = request.retryPolicy ?? {};
-      let retriesLeft = retryPolicy.maxRetries ?? 2;
-      const timeoutMs = retryPolicy.timeoutMs ?? 15000;
-      let lastExecError = '';
+      const stageResult = await executeComputationWithRetries(
+        request,
+        profile,
+        resolution,
+        runId,
+        tracer,
+        spanExec
+      );
 
-      while (!executionSuccess && retriesLeft >= 0) {
-        try {
-          if (isPythonAnalysis) {
-            const numericCol = profile.columns.find((c) => c.inferredType === 'float' || c.inferredType === 'integer')?.name ?? 'unit_price';
-            const pyResult = await executeSandboxedPython({
-              taskId: `wf_py_${runId.substring(4, 12)}`,
-              taskType: 'descriptive_stats',
-              datasetId: path.basename(request.datasetPath),
-              datasetPath: request.datasetPath,
-              columns: [numericCol],
-              parameters: { column: numericCol },
-              limits: { timeoutMs, maxOutputBytes: 524288, maxRows: 10000 },
-            });
-
-            if (pyResult.status === 'error') {
-              throw new Error(pyResult.error ?? 'Python analysis failed');
-            }
-
-            executionResult = {
-              engineUsed: 'python',
-              pythonTaskType: pyResult.taskType,
-              numericSummary: pyResult.numericResults as Record<string, unknown>,
-              rowCount: pyResult.sampleSize?.validObservations ?? 1,
-              executionDurationMs: pyResult.provenance.executionTimeMs,
-            };
-            executionSuccess = true;
-          } else {
-            const metricFormula = resolution.sqlExpression ?? 'COUNT(*)';
-            const dimensionCol = profile.columns.find((c) => c.inferredType === 'string')?.name ?? 'product_category';
-
-            const sql = `
-              SELECT 
-                ${dimensionCol},
-                ${metricFormula} AS computed_metric,
-                COUNT(*) AS record_count
-              FROM dataset
-              GROUP BY ${dimensionCol}
-              ORDER BY computed_metric DESC
-            `;
-
-            const queryOutput = await executeAnalyticalQuery(
-              {
-                datasetPath: request.datasetPath,
-                sql,
-                timeoutMs,
-              },
-              {}
-            );
-
-            executionResult = {
-              engineUsed: 'duckdb',
-              sql,
-              rows: queryOutput.rows as Array<Record<string, unknown>>,
-              rowCount: queryOutput.rowCount,
-              executionDurationMs: queryOutput.executionTimeMs,
-            };
-            executionSuccess = true;
-          }
-        } catch (err: any) {
-          lastExecError = err.message || String(err);
-          const isTransient = isTransientError(err);
-          if (isTransient && retriesLeft > 0) {
-            tracer.recordSpanRetry(
-              spanExec,
-              'transient_timeout',
-              `Transient execution failure, retrying: ${lastExecError}`
-            );
-            retriesLeft--;
-          } else {
-            // Permanent failure (syntax error, security/safety violation, schema defect) fails immediately without retry
-            break;
-          }
-        }
-      }
-
-      if (!executionSuccess) {
-        const lowerErr = lastExecError.toLowerCase();
-        let failCat: FailureCategory = 'internal_error';
-        if (
-          lowerErr.includes('prohibited') ||
-          lowerErr.includes('security') ||
-          lowerErr.includes('unauthorized') ||
-          lowerErr.includes('syntax') ||
-          lowerErr.includes('statement') ||
-          lowerErr.includes('disallowed')
-        ) {
-          failCat = 'syntax_or_safety_violation';
-        } else if (
-          lowerErr.includes('column') ||
-          lowerErr.includes('table') ||
-          lowerErr.includes('binder error') ||
-          lowerErr.includes('catalog error') ||
-          lowerErr.includes('not found') ||
-          lowerErr.includes('does not exist')
-        ) {
-          failCat = 'schema_incompatible';
-        } else if (lowerErr.includes('timed out') || lowerErr.includes('timeout')) {
-          failCat = 'transient_timeout';
-        }
-
-        tracer.endSpan(spanExec, 'failed', failCat, { error: lastExecError });
+      if (!stageResult.success) {
+        tracer.endSpan(spanExec, 'failed', stageResult.failureCategory || 'internal_error', {
+          error: stageResult.lastExecError,
+        });
         status = 'execution_error';
-        errors.push(`Analytical execution failed: ${lastExecError}`);
-        finalExplanation = `Analytical execution halted due to query error: ${lastExecError}`;
+        errors.push(`Analytical execution failed: ${stageResult.lastExecError}`);
+        finalExplanation = `Analytical execution halted due to query error: ${stageResult.lastExecError}`;
         return {
           workflowId: 'analytical-workflow',
           runId,
@@ -447,14 +290,13 @@ export class AnalyticalWorkflowOrchestrator {
         };
       }
 
+      executionResult = stageResult.executionResult;
       tracer.endSpan(spanExec, 'completed', 'none', {
         engineUsed: executionResult?.engineUsed,
         rowCount: executionResult?.rowCount,
       });
 
-      // =======================================================================
       // STAGE 5: Evidence & Result Validation
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('validation', 70, 'Validating computed evidence and invariants...');
       const spanVal = tracer.startSpan('validation', 'validateAnalysisResultTool');
@@ -506,9 +348,7 @@ export class AnalyticalWorkflowOrchestrator {
 
       tracer.endSpan(spanVal, 'completed', 'none', { ruleApplied: validation.ruleApplied });
 
-      // =======================================================================
       // STAGE 6: Insight Generation
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('insight_generation', 85, 'Extracting data findings and business insights...');
       const spanInsights = tracer.startSpan('insight_generation', 'generateBusinessInsights');
@@ -530,85 +370,30 @@ export class AnalyticalWorkflowOrchestrator {
         tracer.endSpan(spanInsights, 'warning', 'none', { error: edaErr.message });
       }
 
-      // =======================================================================
       // STAGE 7: Optional Artifact Generation (with Partial Failure Containment)
-      // =======================================================================
       checkAborted();
       options?.onProgress?.('artifact_generation', 95, 'Generating interactive dashboard and executive reports...');
-      const artifactsReq = request.generateArtifacts ?? {};
-      if (artifactsReq.dashboard || artifactsReq.report) {
-        const spanArtifacts = tracer.startSpan('artifact_generation', 'dashboardAndReportEngines');
-        try {
-          if (artifactsReq.dashboard) {
-            const dashboardSpec = await generateDashboardSpec({
-              datasetPath: request.datasetPath,
-            });
-            generatedArtifacts.dashboardSpecGenerated = true;
-            generatedArtifacts.dashboardSpec = dashboardSpec;
-          }
-
-          if (artifactsReq.report) {
-            const reportSpec = await generateReportSpec(request.datasetPath, {
-              title: artifactsReq.reportTitle ?? 'Analytical Workflow Executive Report',
-            });
-            const html = renderReportHtml(reportSpec);
-            const reportDir = path.resolve(process.cwd(), 'reports');
-            if (!fs.existsSync(reportDir)) {
-              fs.mkdirSync(reportDir, { recursive: true });
-            }
-            const htmlPath = path.join(reportDir, `wf_report_${runId.substring(4, 12)}.html`);
-            fs.writeFileSync(htmlPath, html, 'utf-8');
-            generatedArtifacts.reportHtmlPath = htmlPath;
-
-            try {
-              const pdfPath = path.join(reportDir, `wf_report_${runId.substring(4, 12)}.pdf`);
-              const pdfResult = await exportPdfFromHtml(html, pdfPath);
-              if (pdfResult && pdfResult.outputPath) {
-                generatedArtifacts.reportPdfPath = pdfResult.outputPath;
-              }
-            } catch {
-              // PDF generation can be optional if browser unavailable
-            }
-          }
-
-          tracer.endSpan(spanArtifacts, 'completed', 'none');
-        } catch (artifactErr: any) {
-          // PARTIAL FAILURE ISOLATION:
-          // Do not fail the whole analysis! Preserve verified computation and report artifact failure explicitly.
-          tracer.endSpan(spanArtifacts, 'warning', 'artifact_generation_error', {
-            error: artifactErr.message,
-          });
-          status = 'partial_success_artifact_failed';
-          generatedArtifacts.artifactError = artifactErr.message;
-          warnings.push(`Analysis succeeded but artifact generation failed: ${artifactErr.message}`);
-        }
+      const artifactOutcome = await executeArtifactGeneration(request, runId, tracer);
+      generatedArtifacts = artifactOutcome.generatedArtifacts;
+      if (artifactOutcome.artifactStatus) {
+        status = artifactOutcome.artifactStatus;
+      }
+      if (artifactOutcome.warning) {
+        warnings.push(artifactOutcome.warning);
       }
 
-      // =======================================================================
       // STAGE 8: Final Response Assembly
-      // =======================================================================
       const spanAssemble = tracer.startSpan('response_assembly');
-      const metricName = resolution.resolvedMetric?.name ?? 'Computed Analysis';
-      const metricOwner = resolution.resolvedMetric?.owner ?? 'Internal Governance';
-      const formula = resolution.resolvedMetric?.calculationFormula ?? resolution.sqlExpression ?? 'Statistical Engine';
-      const additivity = resolution.resolvedMetric?.additivity ?? 'additive';
-      const citationTitle = retrievedCitations[0]?.title ?? 'Standard Corporate Policy';
-
-      let explanation = `Analytical Workflow completed with evidence verification for: "${request.userQuery}".\n`;
-      explanation += `- Target Dataset: ${path.basename(request.datasetPath)} (${inspectionSummary.rowCount} rows, ${inspectionSummary.columnCount} columns, quality score: ${inspectionSummary.dataQualityScore}%).\n`;
-      explanation += `- Metric Grounding: '${metricName}' governed by ${metricOwner} using formula: ${formula}.\n`;
-      explanation += `- Additivity Semantics: '${additivity}' — verified aggregation compatibility.\n`;
-      explanation += `- Grounded Citation: ${citationTitle}.\n`;
-      explanation += `- Evidence Validation: ${validation.details}.\n`;
-
-      if (insights.length > 0) {
-        explanation += `- Key Finding: ${insights[0]?.title} (${insights[0]?.description}).\n`;
-      }
-
-      finalExplanation = explanation;
+      finalExplanation = formatWorkflowExplanation(
+        request,
+        inspectionSummary,
+        resolution,
+        retrievedCitations,
+        validation.details,
+        insights
+      );
       tracer.endSpan(spanAssemble, 'completed', 'none');
 
-      // Finalize Trace
       const finalTraceStatus =
         status === 'partial_success_artifact_failed'
           ? 'partial_success'

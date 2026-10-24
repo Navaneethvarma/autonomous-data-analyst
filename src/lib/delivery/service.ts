@@ -1,41 +1,63 @@
 import crypto from 'node:crypto';
-import { DatabaseAdapter } from '../db/adapter.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import {
+  DeliveryRepository,
+  type IDeliveryRepository,
+  ScheduleRepository,
+  type IScheduleRepository,
+  AnalysisRepository,
+  type IAnalysisRepository,
+  AuditRepository,
+  type IAuditRepository,
+} from '../db/repositories/index.js';
 import { DeliveryDestinationRecord } from '../db/types.js';
 import { decryptSecret, redactSensitiveData } from '../security/encryption.js';
 import { assertTenantScope, AuthorizationError } from '../auth/rbac.js';
 
-export interface DeliveryResult {
-  ok: boolean;
-  destinationType: 'email' | 'webhook';
-  destinationId: string;
-  deliveredAt: string;
-  recipientSummary: string;
-  details?: Record<string, any>;
-  errorMessage?: string;
-}
+import type {
+  DeliveryResult,
+  DeliveryPayload,
+} from '../../types/delivery.types.js';
 
-export interface DeliveryPayload {
-  deliveryId: string;
-  scheduleId: string;
-  scheduleRunId: string;
-  analysisId: string;
-  organizationId: string;
-  reportName: string;
-  userQuery: string;
-  status: string;
-  generatedAt: string;
-  summaryExplanation?: string;
-  artifacts: Array<{
-    id: string;
-    artifactType: string;
-    fileName: string;
-    mimeType: string;
-    fileSizeBytes: number;
-  }>;
+export type { DeliveryResult, DeliveryPayload };
+
+export interface DeliveryServiceOptions {
+  deliveryRepo: IDeliveryRepository;
+  scheduleRepo: IScheduleRepository;
+  analysisRepo: IAnalysisRepository;
+  auditRepo: IAuditRepository;
 }
 
 export class DeliveryService {
-  constructor(private db: DatabaseAdapter) {}
+  private deliveryRepo: IDeliveryRepository;
+  private scheduleRepo: IScheduleRepository;
+  private analysisRepo: IAnalysisRepository;
+  private auditRepo: IAuditRepository;
+
+  constructor(
+    dbOrOptions: DatabaseAdapter | DeliveryServiceOptions | IDeliveryRepository,
+    scheduleRepo?: IScheduleRepository,
+    analysisRepo?: IAnalysisRepository,
+    auditRepo?: IAuditRepository
+  ) {
+    if ('createDeliveryDestination' in dbOrOptions && 'getDeliveryDestinationById' in dbOrOptions) {
+      const db = dbOrOptions as DatabaseAdapter;
+      this.deliveryRepo = new DeliveryRepository(db);
+      this.scheduleRepo = scheduleRepo || new ScheduleRepository(db);
+      this.analysisRepo = analysisRepo || new AnalysisRepository(db);
+      this.auditRepo = auditRepo || new AuditRepository(db);
+    } else if ('deliveryRepo' in dbOrOptions) {
+      this.deliveryRepo = dbOrOptions.deliveryRepo;
+      this.scheduleRepo = dbOrOptions.scheduleRepo;
+      this.analysisRepo = dbOrOptions.analysisRepo;
+      this.auditRepo = dbOrOptions.auditRepo;
+    } else {
+      this.deliveryRepo = dbOrOptions;
+      this.scheduleRepo = scheduleRepo!;
+      this.analysisRepo = analysisRepo!;
+      this.auditRepo = auditRepo!;
+    }
+  }
 
   /**
    * Dispatches report artifacts and analysis summary to a tenant-scoped delivery destination.
@@ -51,10 +73,10 @@ export class DeliveryService {
     const { scheduleId, scheduleRunId, analysisId, organizationId, destinationId } = options;
 
     // 1. Tenant boundary enforcement: Destination must belong strictly to this tenant
-    const destination = await this.db.getDeliveryDestinationById(destinationId, organizationId);
+    const destination = await this.deliveryRepo.findById(destinationId, organizationId);
     if (!destination) {
       const err = `Delivery destination '${destinationId}' not found or unauthorized for tenant '${organizationId}'.`;
-      await this.db.updateScheduleRun(scheduleRunId, {
+      await this.scheduleRepo.updateRun(scheduleRunId, {
         deliveryStatus: 'failed',
         deliveryDetailsJson: JSON.stringify({ error: err, timestamp: new Date().toISOString() }),
       });
@@ -71,7 +93,7 @@ export class DeliveryService {
         recipientSummary: destination.recipientEmails || destination.webhookUrl || '',
         errorMessage: 'Delivery destination is inactive/disabled.',
       };
-      await this.db.updateScheduleRun(scheduleRunId, {
+      await this.scheduleRepo.updateRun(scheduleRunId, {
         deliveryStatus: 'skipped',
         deliveryDetailsJson: JSON.stringify(result),
       });
@@ -79,13 +101,13 @@ export class DeliveryService {
     }
 
     // 2. Fetch Analysis and Artifacts within Tenant Boundary
-    const analysis = await this.db.getAnalysisById(analysisId, organizationId);
+    const analysis = await this.analysisRepo.findById(analysisId, organizationId);
     if (!analysis) {
       throw new Error(`Analysis '${analysisId}' not found for tenant '${organizationId}'.`);
     }
     assertTenantScope(organizationId, analysis.organizationId, 'Analysis');
 
-    const artifacts = await this.db.listArtifactsByAnalysis(analysisId, organizationId);
+    const artifacts = await this.analysisRepo.listArtifacts(analysisId, organizationId);
 
     // 3. Construct Sanitized Delivery Payload
     const deliveryId = `del_${crypto.createHash('sha256').update(`${scheduleRunId}:${destinationId}`).digest('hex').slice(0, 16)}`;
@@ -131,12 +153,12 @@ export class DeliveryService {
     }
 
     // 5. Durable Status & Sanitized Audit Recording
-    await this.db.updateScheduleRun(scheduleRunId, {
+    await this.scheduleRepo.updateRun(scheduleRunId, {
       deliveryStatus: result.ok ? 'sent' : 'failed',
       deliveryDetailsJson: JSON.stringify(redactSensitiveData(result)),
     });
 
-    await this.db.createAuditLog({
+    await this.auditRepo.create({
       id: `audit_${crypto.randomUUID()}`,
       organizationId,
       action: result.ok ? 'delivery:dispatched' : 'delivery:failed',

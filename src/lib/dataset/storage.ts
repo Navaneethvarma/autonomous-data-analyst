@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DatabaseAdapter } from '../db/adapter.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import { DatasetRepository, type IDatasetRepository } from '../db/repositories/index.js';
 import { DatasetRecord, DatasetFormat } from '../db/types.js';
 import { profileDataset } from './profiler.js';
 import type { DatasetProfile } from './types.js';
@@ -12,24 +13,28 @@ import {
   DatasetEmptyError,
 } from './validator.js';
 import { assertTenantScope, assertPermission } from '../auth/rbac.js';
-import { AuthenticatedContext } from '../auth/service.js';
+import type { AuthenticatedContext } from '../../types/auth.types.js';
+import type { DatasetUploadOptions } from '../../types/dataset.types.js';
 import { computeSchemaFingerprint } from '../observability/tracer.js';
+
+export type { DatasetUploadOptions };
 
 const ALLOWED_EXTENSIONS = new Set(['.csv', '.parquet']);
 const DEFAULT_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
 
-export interface DatasetUploadOptions {
-  originalFilename: string;
-  buffer: Buffer;
-}
-
 export class DatasetStorageService {
   private baseDir: string;
+  private datasetRepo: IDatasetRepository;
 
   constructor(
-    private db: DatabaseAdapter,
+    dbOrRepo: DatabaseAdapter | IDatasetRepository,
     customBaseDir?: string
   ) {
+    if ('createDataset' in dbOrRepo && 'saveDatasetProfile' in dbOrRepo && 'init' in dbOrRepo) {
+      this.datasetRepo = new DatasetRepository(dbOrRepo as DatabaseAdapter);
+    } else {
+      this.datasetRepo = dbOrRepo as IDatasetRepository;
+    }
     this.baseDir = customBaseDir || path.resolve(process.cwd(), 'datasets', 'tenants');
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
@@ -112,7 +117,7 @@ export class DatasetStorageService {
     );
 
     // 6. Record in Database
-    const dataset = await this.db.createDataset({
+    const dataset = await this.datasetRepo.create({
       id: datasetId,
       organizationId: auth.organization.id,
       uploadedByUserId: auth.user.id,
@@ -126,7 +131,7 @@ export class DatasetStorageService {
       status: 'ready',
     });
 
-    await this.db.saveDatasetProfile({
+    await this.datasetRepo.saveProfile({
       id: crypto.randomUUID(),
       datasetId,
       profileJson: JSON.stringify(profile),
@@ -141,7 +146,7 @@ export class DatasetStorageService {
   async getDataset(auth: AuthenticatedContext, datasetId: string): Promise<DatasetRecord> {
     assertPermission(auth.role, 'dataset:read');
 
-    const dataset = await this.db.getDatasetById(datasetId);
+    const dataset = await this.datasetRepo.findById(datasetId);
     if (!dataset) {
       throw new Error(`Dataset '${datasetId}' not found.`);
     }
@@ -155,7 +160,7 @@ export class DatasetStorageService {
    */
   async getDatasetProfile(auth: AuthenticatedContext, datasetId: string): Promise<DatasetProfile | null> {
     const dataset = await this.getDataset(auth, datasetId);
-    const profileRecord = await this.db.getDatasetProfile(dataset.id);
+    const profileRecord = await this.datasetRepo.getProfile(dataset.id);
     if (!profileRecord) return null;
     return JSON.parse(profileRecord.profileJson) as DatasetProfile;
   }
@@ -165,7 +170,7 @@ export class DatasetStorageService {
    */
   async listDatasets(auth: AuthenticatedContext): Promise<DatasetRecord[]> {
     assertPermission(auth.role, 'dataset:read');
-    return this.db.listDatasetsByOrg(auth.organization.id);
+    return this.datasetRepo.listForOrganization(auth.organization.id);
   }
 
   /**
@@ -184,6 +189,7 @@ export class DatasetStorageService {
       // file might already be removed
     }
 
-    await this.db.deleteDataset(dataset.id, auth.organization.id);
+    await this.datasetRepo.delete(dataset.id, auth.organization.id);
   }
 }
+

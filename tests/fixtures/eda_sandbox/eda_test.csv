@@ -1,0 +1,10 @@
+id,event_date,category,metric_x,metric_y,status
+1,2026-01-01,Alpha,10,1,active
+2,2026-01-02,Alpha,20,2,active
+3,2026-01-03,Alpha,30,3,active
+4,2026-01-04,Beta,40,4,active
+5,2026-01-05,Beta,50,5,active
+6,2026-01-06,Beta,60,6,pending
+7,2026-01-07,Gamma,70,7,pending
+8,2026-01-08,Gamma,80,8,pending
+9,2026-01-09,Gamma,500,9,null

@@ -1,40 +1,71 @@
 import crypto from 'node:crypto';
-import { DatabaseAdapter } from '../db/adapter.js';
-import { ScheduleRecord, ScheduleRunRecord, ScheduleType, ExportReportFormat } from '../db/types.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import {
+  ScheduleRepository,
+  type IScheduleRepository,
+  DatasetRepository,
+  type IDatasetRepository,
+  DeliveryRepository,
+  type IDeliveryRepository,
+  BiRepository,
+  type IBiRepository,
+  AuditRepository,
+  type IAuditRepository,
+} from '../db/repositories/index.js';
+import type { ScheduleRecord, ScheduleRunRecord } from '../../types/scheduler.types.js';
 import { TimezoneScheduler } from './timezone.js';
 import { assertTenantScope, AuthorizationError } from '../auth/rbac.js';
 
-export interface CreateScheduleInput {
-  organizationId: string;
-  userId: string;
-  datasetId: string;
-  name: string;
-  userQuery: string;
-  scheduleType: ScheduleType;
-  cronExpression?: string;
-  timezone?: string;
-  oneTimeRunAt?: string;
-  concurrencyLimit?: number;
-  deliveryDestinationId?: string;
-  biConnectionId?: string;
-  exportFormat?: ExportReportFormat;
-}
+import type {
+  CreateScheduleInput,
+  UpdateScheduleInput,
+} from '../../types/scheduler.types.js';
 
-export interface UpdateScheduleInput {
-  name?: string;
-  userQuery?: string;
-  cronExpression?: string;
-  timezone?: string;
-  oneTimeRunAt?: string;
-  concurrencyLimit?: number;
-  isEnabled?: boolean;
-  deliveryDestinationId?: string | null;
-  biConnectionId?: string | null;
-  exportFormat?: ExportReportFormat;
+export type { CreateScheduleInput, UpdateScheduleInput };
+
+export interface ScheduleServiceOptions {
+  scheduleRepo: IScheduleRepository;
+  datasetRepo: IDatasetRepository;
+  deliveryRepo: IDeliveryRepository;
+  biRepo: IBiRepository;
+  auditRepo: IAuditRepository;
 }
 
 export class ScheduleService {
-  constructor(private db: DatabaseAdapter) {}
+  private scheduleRepo: IScheduleRepository;
+  private datasetRepo: IDatasetRepository;
+  private deliveryRepo: IDeliveryRepository;
+  private biRepo: IBiRepository;
+  private auditRepo: IAuditRepository;
+
+  constructor(
+    dbOrOptions: DatabaseAdapter | ScheduleServiceOptions | IScheduleRepository,
+    datasetRepo?: IDatasetRepository,
+    deliveryRepo?: IDeliveryRepository,
+    biRepo?: IBiRepository,
+    auditRepo?: IAuditRepository
+  ) {
+    if ('createSchedule' in dbOrOptions && 'getScheduleById' in dbOrOptions) {
+      const db = dbOrOptions as DatabaseAdapter;
+      this.scheduleRepo = new ScheduleRepository(db);
+      this.datasetRepo = datasetRepo || new DatasetRepository(db);
+      this.deliveryRepo = deliveryRepo || new DeliveryRepository(db);
+      this.biRepo = biRepo || new BiRepository(db);
+      this.auditRepo = auditRepo || new AuditRepository(db);
+    } else if ('scheduleRepo' in dbOrOptions) {
+      this.scheduleRepo = dbOrOptions.scheduleRepo;
+      this.datasetRepo = dbOrOptions.datasetRepo;
+      this.deliveryRepo = dbOrOptions.deliveryRepo;
+      this.biRepo = dbOrOptions.biRepo;
+      this.auditRepo = dbOrOptions.auditRepo;
+    } else {
+      this.scheduleRepo = dbOrOptions;
+      this.datasetRepo = datasetRepo!;
+      this.deliveryRepo = deliveryRepo!;
+      this.biRepo = biRepo!;
+      this.auditRepo = auditRepo!;
+    }
+  }
 
   /**
    * Creates a new analysis schedule, enforcing dataset ownership and timezone validity.
@@ -43,7 +74,7 @@ export class ScheduleService {
     const { organizationId, userId, datasetId } = input;
 
     // 1. Verify Dataset tenant ownership
-    const dataset = await this.db.getDatasetById(datasetId, organizationId);
+    const dataset = await this.datasetRepo.findById(datasetId, organizationId);
     if (!dataset) {
       throw new AuthorizationError(`Dataset '${datasetId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
@@ -51,7 +82,7 @@ export class ScheduleService {
 
     // 2. Verify Delivery Destination if specified
     if (input.deliveryDestinationId) {
-      const dest = await this.db.getDeliveryDestinationById(input.deliveryDestinationId, organizationId);
+      const dest = await this.deliveryRepo.findById(input.deliveryDestinationId, organizationId);
       if (!dest) {
         throw new AuthorizationError(`Delivery destination '${input.deliveryDestinationId}' not found or unauthorized.`);
       }
@@ -60,7 +91,7 @@ export class ScheduleService {
 
     // 3. Verify BI Connection if specified
     if (input.biConnectionId) {
-      const conn = await this.db.getBiConnectionById(input.biConnectionId, organizationId);
+      const conn = await this.biRepo.findById(input.biConnectionId, organizationId);
       if (!conn) {
         throw new AuthorizationError(`BI connection '${input.biConnectionId}' not found or unauthorized.`);
       }
@@ -99,7 +130,7 @@ export class ScheduleService {
     }
 
     const scheduleId = `sched_${crypto.randomUUID()}`;
-    const record = await this.db.createSchedule({
+    const record = await this.scheduleRepo.create({
       id: scheduleId,
       organizationId,
       createdByUserId: userId,
@@ -120,7 +151,7 @@ export class ScheduleService {
       status: 'active',
     });
 
-    await this.db.createAuditLog({
+    await this.auditRepo.create({
       id: `audit_${crypto.randomUUID()}`,
       organizationId,
       userId,
@@ -142,7 +173,7 @@ export class ScheduleService {
     userId: string,
     updates: UpdateScheduleInput
   ): Promise<ScheduleRecord> {
-    const existing = await this.db.getScheduleById(scheduleId, organizationId);
+    const existing = await this.scheduleRepo.findById(scheduleId, organizationId);
     if (!existing) {
       throw new AuthorizationError(`Schedule '${scheduleId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
@@ -170,14 +201,14 @@ export class ScheduleService {
 
     // Verify delivery destination if changed
     if (updates.deliveryDestinationId) {
-      const dest = await this.db.getDeliveryDestinationById(updates.deliveryDestinationId, organizationId);
+      const dest = await this.deliveryRepo.findById(updates.deliveryDestinationId, organizationId);
       if (!dest) throw new AuthorizationError(`Delivery destination '${updates.deliveryDestinationId}' not found.`);
       assertTenantScope(organizationId, dest.organizationId, 'DeliveryDestination');
     }
 
     // Verify bi connection if changed
     if (updates.biConnectionId) {
-      const conn = await this.db.getBiConnectionById(updates.biConnectionId, organizationId);
+      const conn = await this.biRepo.findById(updates.biConnectionId, organizationId);
       if (!conn) throw new AuthorizationError(`BI connection '${updates.biConnectionId}' not found.`);
       assertTenantScope(organizationId, conn.organizationId, 'BiConnection');
     }
@@ -192,10 +223,10 @@ export class ScheduleService {
       payload.status = updates.isEnabled ? 'active' : 'paused';
     }
 
-    await this.db.updateSchedule(scheduleId, payload);
-    const updated = (await this.db.getScheduleById(scheduleId, organizationId))!;
+    await this.scheduleRepo.update(scheduleId, payload);
+    const updated = (await this.scheduleRepo.findById(scheduleId, organizationId))!;
 
-    await this.db.createAuditLog({
+    await this.auditRepo.create({
       id: `audit_${crypto.randomUUID()}`,
       organizationId,
       userId,
@@ -212,15 +243,15 @@ export class ScheduleService {
    * Deletes a schedule within tenant boundary.
    */
   async deleteSchedule(scheduleId: string, organizationId: string, userId: string): Promise<boolean> {
-    const existing = await this.db.getScheduleById(scheduleId, organizationId);
+    const existing = await this.scheduleRepo.findById(scheduleId, organizationId);
     if (!existing) {
       throw new AuthorizationError(`Schedule '${scheduleId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
     assertTenantScope(organizationId, existing.organizationId, 'Schedule');
 
-    const ok = await this.db.deleteSchedule(scheduleId, organizationId);
+    const ok = await this.scheduleRepo.delete(scheduleId, organizationId);
     if (ok) {
-      await this.db.createAuditLog({
+      await this.auditRepo.create({
         id: `audit_${crypto.randomUUID()}`,
         organizationId,
         userId,
@@ -237,12 +268,12 @@ export class ScheduleService {
    * Lists all execution runs for a given schedule.
    */
   async listScheduleRuns(scheduleId: string, organizationId: string): Promise<ScheduleRunRecord[]> {
-    const schedule = await this.db.getScheduleById(scheduleId, organizationId);
+    const schedule = await this.scheduleRepo.findById(scheduleId, organizationId);
     if (!schedule) {
       throw new AuthorizationError(`Schedule '${scheduleId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
     assertTenantScope(organizationId, schedule.organizationId, 'Schedule');
 
-    return this.db.listScheduleRuns(scheduleId, organizationId);
+    return this.scheduleRepo.listRuns(scheduleId, organizationId);
   }
 }

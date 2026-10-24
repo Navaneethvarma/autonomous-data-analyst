@@ -1,0 +1,4 @@
+id,const_num,const_str,all_null,skewed_val
+1,100,fixed,null,1
+2,100,fixed,null,2
+3,100,fixed,null,100

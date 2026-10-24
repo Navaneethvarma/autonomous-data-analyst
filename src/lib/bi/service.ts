@@ -1,5 +1,15 @@
 import crypto from 'node:crypto';
-import { DatabaseAdapter } from '../db/adapter.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import {
+  BiRepository,
+  type IBiRepository,
+  AuditRepository,
+  type IAuditRepository,
+  AnalysisRepository,
+  type IAnalysisRepository,
+  ScheduleRepository,
+  type IScheduleRepository,
+} from '../db/repositories/index.js';
 import { SupersetClient } from './superset-client.js';
 import { decryptSecret, encryptSecret, redactSensitiveData } from '../security/encryption.js';
 import { assertTenantScope, AuthorizationError } from '../auth/rbac.js';
@@ -14,8 +24,43 @@ export interface BiExportResult {
   errorMessage?: string;
 }
 
+export interface BiServiceOptions {
+  biRepo: IBiRepository;
+  auditRepo: IAuditRepository;
+  analysisRepo: IAnalysisRepository;
+  scheduleRepo: IScheduleRepository;
+}
+
 export class BiIntegrationService {
-  constructor(private db: DatabaseAdapter) {}
+  private biRepo: IBiRepository;
+  private auditRepo: IAuditRepository;
+  private analysisRepo: IAnalysisRepository;
+  private scheduleRepo: IScheduleRepository;
+
+  constructor(
+    dbOrOptions: DatabaseAdapter | BiServiceOptions | IBiRepository,
+    auditRepo?: IAuditRepository,
+    analysisRepo?: IAnalysisRepository,
+    scheduleRepo?: IScheduleRepository
+  ) {
+    if ('createBiConnection' in dbOrOptions && 'getBiConnectionById' in dbOrOptions) {
+      const db = dbOrOptions as DatabaseAdapter;
+      this.biRepo = new BiRepository(db);
+      this.auditRepo = auditRepo || new AuditRepository(db);
+      this.analysisRepo = analysisRepo || new AnalysisRepository(db);
+      this.scheduleRepo = scheduleRepo || new ScheduleRepository(db);
+    } else if ('biRepo' in dbOrOptions) {
+      this.biRepo = dbOrOptions.biRepo;
+      this.auditRepo = dbOrOptions.auditRepo;
+      this.analysisRepo = dbOrOptions.analysisRepo;
+      this.scheduleRepo = dbOrOptions.scheduleRepo;
+    } else {
+      this.biRepo = dbOrOptions;
+      this.auditRepo = auditRepo!;
+      this.analysisRepo = analysisRepo!;
+      this.scheduleRepo = scheduleRepo!;
+    }
+  }
 
   /**
    * Tests a BI connection, validating credentials and instance reachability.
@@ -25,7 +70,7 @@ export class BiIntegrationService {
     organizationId: string,
     customFetch?: typeof fetch
   ): Promise<{ ok: boolean; message: string; latencyMs: number }> {
-    const conn = await this.db.getBiConnectionById(connectionId, organizationId);
+    const conn = await this.biRepo.findById(connectionId, organizationId);
     if (!conn) {
       throw new AuthorizationError(`BI connection '${connectionId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
@@ -42,13 +87,13 @@ export class BiIntegrationService {
     const start = Date.now();
     try {
       const res = await client.testConnection();
-      await this.db.updateBiConnection(connectionId, {
+      await this.biRepo.update(connectionId, {
         status: 'connected',
         lastTestedAt: new Date().toISOString(),
         lastError: null,
       });
 
-      await this.db.createAuditLog({
+      await this.auditRepo.create({
         id: `audit_${crypto.randomUUID()}`,
         organizationId,
         action: 'bi:connection_tested',
@@ -65,13 +110,13 @@ export class BiIntegrationService {
     } catch (err: any) {
       const latencyMs = Date.now() - start;
       const sanitizedErr = redactSensitiveData(err.message || 'Connection test failed');
-      await this.db.updateBiConnection(connectionId, {
+      await this.biRepo.update(connectionId, {
         status: 'error',
         lastTestedAt: new Date().toISOString(),
         lastError: sanitizedErr,
       });
 
-      await this.db.createAuditLog({
+      await this.auditRepo.create({
         id: `audit_${crypto.randomUUID()}`,
         organizationId,
         action: 'bi:connection_test_failed',
@@ -101,13 +146,13 @@ export class BiIntegrationService {
   }): Promise<BiExportResult> {
     const { connectionId, organizationId, analysisId, scheduleRunId, datasourceId = 1, customFetch } = options;
 
-    const conn = await this.db.getBiConnectionById(connectionId, organizationId);
+    const conn = await this.biRepo.findById(connectionId, organizationId);
     if (!conn) {
       throw new AuthorizationError(`BI connection '${connectionId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
     assertTenantScope(organizationId, conn.organizationId, 'BiConnection');
 
-    const analysis = await this.db.getAnalysisById(analysisId, organizationId);
+    const analysis = await this.analysisRepo.findById(analysisId, organizationId);
     if (!analysis) {
       throw new Error(`Analysis '${analysisId}' not found for tenant '${organizationId}'.`);
     }
@@ -175,13 +220,13 @@ export class BiIntegrationService {
       };
 
       if (scheduleRunId) {
-        await this.db.updateScheduleRun(scheduleRunId, {
+        await this.scheduleRepo.updateRun(scheduleRunId, {
           biExportStatus: 'exported',
           biExportDetailsJson: JSON.stringify(redactSensitiveData(result)),
         });
       }
 
-      await this.db.createAuditLog({
+      await this.auditRepo.create({
         id: `audit_${crypto.randomUUID()}`,
         organizationId,
         action: 'bi:charts_exported',
@@ -198,7 +243,7 @@ export class BiIntegrationService {
       const sanitizedErr = redactSensitiveData(err.message || 'BI export failed');
 
       if (scheduleRunId) {
-        await this.db.updateScheduleRun(scheduleRunId, {
+        await this.scheduleRepo.updateRun(scheduleRunId, {
           biExportStatus: 'failed',
           biExportDetailsJson: JSON.stringify({ error: sanitizedErr, timestamp: new Date().toISOString() }),
         });
@@ -222,20 +267,20 @@ export class BiIntegrationService {
     organizationId: string,
     newCredentials: SupersetCredentials
   ): Promise<void> {
-    const conn = await this.db.getBiConnectionById(connectionId, organizationId);
+    const conn = await this.biRepo.findById(connectionId, organizationId);
     if (!conn) {
       throw new AuthorizationError(`BI connection '${connectionId}' not found or unauthorized for tenant '${organizationId}'.`);
     }
     assertTenantScope(organizationId, conn.organizationId, 'BiConnection');
 
     const encrypted = encryptSecret(JSON.stringify(newCredentials));
-    await this.db.updateBiConnection(connectionId, {
+    await this.biRepo.update(connectionId, {
       encryptedCredentials: encrypted,
       status: 'untested',
       lastError: null,
     });
 
-    await this.db.createAuditLog({
+    await this.auditRepo.create({
       id: `audit_${crypto.randomUUID()}`,
       organizationId,
       action: 'bi:credentials_rotated',

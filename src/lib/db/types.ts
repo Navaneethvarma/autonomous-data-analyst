@@ -1,205 +1,109 @@
-export type UserRole = 'admin' | 'analyst' | 'viewer';
+/**
+ * Database persistence models, domain enumerations, and adapter contracts.
+ * Canonical definitions are maintained in `src/types/`.
+ */
 
-export interface OrganizationRecord {
-  id: string;
-  name: string;
-  slug: string;
-  createdAt: string;
-  updatedAt: string;
+import type {
+  OrganizationRecord,
+  UserRecord,
+  MembershipRecord,
+  SessionRecord,
+  DatasetRecord,
+  DatasetProfileRecord,
+  AnalysisRecord,
+  ArtifactRecord,
+  UserRole,
+  ScheduleRecord,
+  ScheduleRunRecord,
+  DeliveryDestinationRecord,
+  BiConnectionRecord,
+  AuditLogRecord,
+} from '../../types/index.js';
+
+export * from '../../types/index.js';
+
+export interface DatabaseAdapter {
+  init(): Promise<void>;
+  close(): Promise<void>;
+
+  // Organization
+  createOrganization(org: Omit<OrganizationRecord, 'createdAt' | 'updatedAt'>): Promise<OrganizationRecord>;
+  getOrganizationById(id: string): Promise<OrganizationRecord | null>;
+  getOrganizationBySlug(slug: string): Promise<OrganizationRecord | null>;
+
+  // User
+  createUser(user: Omit<UserRecord, 'createdAt' | 'updatedAt'>): Promise<UserRecord>;
+  getUserById(id: string): Promise<UserRecord | null>;
+  getUserByEmail(email: string): Promise<UserRecord | null>;
+
+  // Membership
+  createMembership(mem: Omit<MembershipRecord, 'createdAt'>): Promise<MembershipRecord>;
+  getMembership(organizationId: string, userId: string): Promise<MembershipRecord | null>;
+  getMembershipsByUser(userId: string): Promise<MembershipRecord[]>;
+  updateMembershipRole(organizationId: string, userId: string, role: UserRole): Promise<void>;
+
+  // Session
+  createSession(session: Omit<SessionRecord, 'createdAt'>): Promise<SessionRecord>;
+  getSessionByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
+  deleteSession(tokenHash: string): Promise<void>;
+  deleteUserSessions(userId: string): Promise<void>;
+
+  // Dataset
+  createDataset(dataset: Omit<DatasetRecord, 'createdAt' | 'updatedAt'>): Promise<DatasetRecord>;
+  getDatasetById(id: string, organizationId?: string): Promise<DatasetRecord | null>;
+  listDatasetsByOrg(organizationId: string): Promise<DatasetRecord[]>;
+  updateDataset(id: string, updates: Partial<DatasetRecord>): Promise<void>;
+  deleteDataset(id: string, organizationId: string): Promise<boolean>;
+
+  // Dataset Profile
+  saveDatasetProfile(profile: Omit<DatasetProfileRecord, 'createdAt'>): Promise<DatasetProfileRecord>;
+  getDatasetProfile(datasetId: string): Promise<DatasetProfileRecord | null>;
+
+  // Analysis
+  createAnalysis(analysis: Omit<AnalysisRecord, 'createdAt' | 'updatedAt'>): Promise<AnalysisRecord>;
+  getAnalysisById(id: string, organizationId?: string): Promise<AnalysisRecord | null>;
+  getAnalysisByJobId(jobId: string): Promise<AnalysisRecord | null>;
+  listAnalysesByOrg(organizationId: string): Promise<AnalysisRecord[]>;
+  updateAnalysis(id: string, updates: Partial<AnalysisRecord>): Promise<void>;
+
+  // Artifact
+  createArtifact(artifact: Omit<ArtifactRecord, 'createdAt'>): Promise<ArtifactRecord>;
+  getArtifactById(id: string, organizationId?: string): Promise<ArtifactRecord | null>;
+  listArtifactsByAnalysis(analysisId: string, organizationId?: string): Promise<ArtifactRecord[]>;
+
+  // Schedules (Milestone 12)
+  createSchedule(schedule: Omit<ScheduleRecord, 'createdAt' | 'updatedAt'>): Promise<ScheduleRecord>;
+  getScheduleById(id: string, organizationId?: string): Promise<ScheduleRecord | null>;
+  listSchedulesByOrg(organizationId: string): Promise<ScheduleRecord[]>;
+  listDueSchedules(nowIso: string): Promise<ScheduleRecord[]>;
+  updateSchedule(id: string, updates: Partial<ScheduleRecord>): Promise<void>;
+  deleteSchedule(id: string, organizationId: string): Promise<boolean>;
+
+  // Schedule Runs (Milestone 12)
+  createScheduleRun(run: Omit<ScheduleRunRecord, 'createdAt'>): Promise<ScheduleRunRecord>;
+  getScheduleRunById(id: string, organizationId?: string): Promise<ScheduleRunRecord | null>;
+  listScheduleRuns(scheduleId: string, organizationId: string): Promise<ScheduleRunRecord[]>;
+  updateScheduleRun(id: string, updates: Partial<ScheduleRunRecord>): Promise<void>;
+  getActiveRunCount(scheduleId: string): Promise<number>;
+
+  // Delivery Destinations (Milestone 12)
+  createDeliveryDestination(dest: Omit<DeliveryDestinationRecord, 'createdAt' | 'updatedAt'>): Promise<DeliveryDestinationRecord>;
+  getDeliveryDestinationById(id: string, organizationId?: string): Promise<DeliveryDestinationRecord | null>;
+  listDeliveryDestinationsByOrg(organizationId: string): Promise<DeliveryDestinationRecord[]>;
+  updateDeliveryDestination(id: string, updates: Partial<DeliveryDestinationRecord>): Promise<void>;
+  deleteDeliveryDestination(id: string, organizationId: string): Promise<boolean>;
+
+  // BI Platform Connections (Milestone 12)
+  createBiConnection(conn: Omit<BiConnectionRecord, 'createdAt' | 'updatedAt'>): Promise<BiConnectionRecord>;
+  getBiConnectionById(id: string, organizationId?: string): Promise<BiConnectionRecord | null>;
+  listBiConnectionsByOrg(organizationId: string): Promise<BiConnectionRecord[]>;
+  updateBiConnection(id: string, updates: Partial<BiConnectionRecord>): Promise<void>;
+  deleteBiConnection(id: string, organizationId: string): Promise<boolean>;
+
+  // Audit Logs (Milestone 12)
+  createAuditLog(log: Omit<AuditLogRecord, 'createdAt'>): Promise<AuditLogRecord>;
+  listAuditLogsByOrg(organizationId: string, limit?: number): Promise<AuditLogRecord[]>;
+
+  // Health
+  checkHealth(): Promise<{ ok: boolean; message?: string }>;
 }
-
-export interface UserRecord {
-  id: string;
-  email: string;
-  name: string;
-  passwordHash: string;
-  salt: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MembershipRecord {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: UserRole;
-  createdAt: string;
-}
-
-export interface SessionRecord {
-  id: string;
-  tokenHash: string;
-  userId: string;
-  organizationId: string;
-  csrfToken: string;
-  expiresAt: string;
-  createdAt: string;
-}
-
-export type DatasetFormat = 'csv' | 'parquet';
-export type DatasetStatus = 'registered' | 'profiling' | 'ready' | 'error';
-
-export interface DatasetRecord {
-  id: string;
-  organizationId: string;
-  uploadedByUserId: string;
-  originalFilename: string;
-  storagePath: string;
-  fileSizeBytes: number;
-  format: DatasetFormat;
-  rowCount: number;
-  columnCount: number;
-  schemaFingerprint: string;
-  status: DatasetStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DatasetProfileRecord {
-  id: string;
-  datasetId: string;
-  profileJson: string; // JSON stringified DatasetProfile
-  createdAt: string;
-}
-
-export type AnalysisJobStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'partial_success';
-
-export interface AnalysisRecord {
-  id: string;
-  organizationId: string;
-  userId: string;
-  datasetId: string;
-  userQuery: string;
-  jobId: string;
-  status: AnalysisJobStatus;
-  stage: string;
-  progressPercent: number;
-  executionResultJson?: string | null;
-  validationResultJson?: string | null;
-  insightsJson?: string | null;
-  dashboardSpecJson?: string | null;
-  clarificationQuestion?: string | null;
-  finalExplanation?: string | null;
-  errorMessage?: string | null;
-  errorCategory?: string | null;
-  traceId?: string | null;
-  runId?: string | null;
-  retryCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ArtifactType = 'dashboard_spec' | 'report_html' | 'report_pdf' | 'trace_log';
-
-export interface ArtifactRecord {
-  id: string;
-  organizationId: string;
-  analysisId: string;
-  artifactType: ArtifactType;
-  storagePath: string;
-  fileName: string;
-  mimeType: string;
-  fileSizeBytes: number;
-  createdAt: string;
-}
-
-// Milestone 12 Types
-export type ScheduleType = 'recurring' | 'one_time';
-export type ScheduleStatus = 'active' | 'paused' | 'completed' | 'failed';
-export type ExportReportFormat = 'html' | 'pdf' | 'both';
-
-export interface ScheduleRecord {
-  id: string;
-  organizationId: string;
-  createdByUserId: string;
-  datasetId: string;
-  name: string;
-  userQuery: string;
-  scheduleType: ScheduleType;
-  cronExpression?: string | null;
-  timezone: string;
-  oneTimeRunAt?: string | null;
-  nextRunAt?: string | null;
-  lastRunAt?: string | null;
-  concurrencyLimit: number;
-  isEnabled: boolean;
-  deliveryDestinationId?: string | null;
-  biConnectionId?: string | null;
-  exportFormat: ExportReportFormat;
-  status: ScheduleStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ScheduleRunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
-export type DeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped';
-export type BiExportStatus = 'pending' | 'exported' | 'failed' | 'skipped';
-
-export interface ScheduleRunRecord {
-  id: string;
-  scheduleId: string;
-  organizationId: string;
-  analysisId?: string | null;
-  scheduledFor: string;
-  startedAt: string;
-  completedAt?: string | null;
-  status: ScheduleRunStatus;
-  errorMessage?: string | null;
-  deliveryStatus?: DeliveryStatus | null;
-  deliveryDetailsJson?: string | null;
-  biExportStatus?: BiExportStatus | null;
-  biExportDetailsJson?: string | null;
-  retryCount: number;
-  createdAt: string;
-}
-
-export type DeliveryDestinationType = 'email' | 'webhook';
-
-export interface DeliveryDestinationRecord {
-  id: string;
-  organizationId: string;
-  name: string;
-  destinationType: DeliveryDestinationType;
-  recipientEmails?: string | null;
-  webhookUrl?: string | null;
-  encryptedSecret?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type BiPlatformType = 'superset' | 'metabase';
-export type BiConnectionStatus = 'untested' | 'connected' | 'error';
-
-export interface BiConnectionRecord {
-  id: string;
-  organizationId: string;
-  name: string;
-  platformType: BiPlatformType;
-  hostUrl: string;
-  encryptedCredentials: string; // AES-256-GCM encrypted
-  status: BiConnectionStatus;
-  lastTestedAt?: string | null;
-  lastError?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AuditLogRecord {
-  id: string;
-  organizationId: string;
-  userId?: string | null;
-  action: string;
-  resourceType: string;
-  resourceId: string;
-  detailsJson?: string | null;
-  ipAddress?: string | null;
-  createdAt: string;
-}
-

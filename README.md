@@ -97,12 +97,15 @@ A production-oriented, TypeScript-based Autonomous Data Analyst built on the [Ma
 - **Safe Dataset Profiling & Verification (Milestones 1–3, `npm run profile`)**:
   - Streaming CSV profiler with path traversal defense, file size limits, reservoir sampling, analytical planning contracts, and domain-aware result validation.
 - **Comprehensive Verification Suite**:
-  - 34 test suites, 193 tests passing deterministically via Vitest (`npm test`).
-  - Clean TypeScript typecheck (`npm run typecheck`).
+  - 48 test suites, 333 tests passing deterministically via Vitest (`npm test`).
+  - Clean TypeScript typecheck (`npm run typecheck` — 0 errors).
   - Clean Mastra backend build (`npm run build`).
-  - Clean Vite frontend dashboard build (`npm run build:dashboard`).
-  - Automated evaluation harness (`npm run eval`).
+  - Clean Vite frontend dashboard build with route-level code splitting (`npm run build:dashboard`).
+  - Automated evaluation harness with 12/12 passing benchmark fixtures (`npm run eval`).
   - End-to-end analytical workflow runner (`npm run workflow:analyze`).
+  - Scheduled Autonomous BI CLI verification (`npm run schedule:demo`).
+  - Database schema migration verification (`npm run migrate`).
+  - Complete Batch 1–5 architectural refactoring with zero source files > 800 lines.
 
 ### Current Limitations
 - **In-Memory Agent State**: Default in-memory store is used in dev/test; durable PostgreSQL storage belongs to Milestone 11.
@@ -148,14 +151,22 @@ autonomous-data-analyst/
 │   │   │   ├── duckdb-engine.ts         # Sandboxed in-memory DuckDB query runner
 │   │   │   ├── eda-types.ts             # Versioned Zod schemas for EDA & insights
 │   │   │   ├── eda-engine.ts            # Automated exploratory analysis via DuckDB
+│   │   │   ├── eda-profilers.ts         # Numeric, categorical, datetime profilers
+│   │   │   ├── eda-helpers.ts           # Type classification & normalization helpers
 │   │   │   └── insight-generator.ts     # Evidence-backed ranked business insight generator
 │   │   ├── dashboard/
 │   │   │   ├── types.ts                 # Declarative DashboardSpec Zod schemas & types
-│   │   │   └── generator.ts             # Deterministic dashboard spec generator engine
+│   │   │   ├── generator.ts             # Deterministic dashboard spec generator engine
+│   │   │   ├── builders.ts              # KPI and layout specification builders
+│   │   │   └── chart-builders.ts        # Modular chart specification builders (bar, donut, scatter, etc.)
 │   │   ├── report/
 │   │   │   ├── types.ts                 # Versioned ReportSpec Zod schemas & types (1.0.0)
 │   │   │   ├── generator.ts             # Grounded report spec generator from EDA results
+│   │   │   ├── report-spec-builders.ts  # Modular section spec builders
 │   │   │   ├── html-renderer.ts         # Semantic HTML renderer with print styles & SVG charts
+│   │   │   ├── report-sections.ts       # HTML section renderers (KPIs, findings, tables, appendix)
+│   │   │   ├── report-styles.ts         # Publication-grade CSS stylesheet template
+│   │   │   ├── svg-charts.ts            # Server-rendered inline SVG visualizations
 │   │   │   └── pdf-generator.ts         # Headless browser PDF exporter via puppeteer-core
 │   │   ├── dataset/
 │   │   │   ├── types.ts                 # Dataset profile Zod schemas & TypeScript types
@@ -165,16 +176,42 @@ autonomous-data-analyst/
 │   │   │   ├── preview.ts               # Bounded preview with reservoir sampling
 │   │   │   ├── plan.ts                  # Schema-grounded plan contract generator
 │   │   │   └── validation.ts            # Domain-aware result validator
+│   │   ├── db/
+│   │   │   ├── types.ts                 # Database schemas, domain entities, repository contracts
+│   │   │   ├── adapter.ts               # High-level database adapter factory
+│   │   │   ├── memory-adapter.ts        # Hermetic in-memory store for offline/test environments
+│   │   │   ├── postgres-adapter.ts      # Production PostgreSQL client implementing all 26 repository operations
+│   │   │   ├── postgres-helpers.ts      # Parameterized query builders & DDL migration definitions
+│   │   │   └── repositories/            # Entity repositories (users, orgs, datasets, analyses, schedules, etc.)
+│   │   ├── workflow/
+│   │   │   ├── orchestrator.ts          # Multi-stage workflow orchestrator & state machine
+│   │   │   ├── stage-execution.ts       # Modular step runners (inspection, execution, validation, insights)
+│   │   │   └── error-classifier.ts      # Transient vs. permanent error classification & retry policies
 │   │   └── python/
 │   │       ├── types.ts                 # Python analysis request/result/provenance Zod contracts
-│   │       ├── sandbox-runner.ts        # Subprocess manager, capability checks, secret scrubber, AST filter
+│   │       ├── sandbox-runner.ts        # Subprocess manager & capability coordinator
+│   │       ├── security-validator.ts    # AST pre-execution safety inspector (blocks os, subprocess, socket)
+│   │       ├── isolation.ts             # Container sandbox probe & fail-closed production boundary
+│   │       ├── worker-lifecycle.ts      # Ephemeral workspace isolation, timeout termination, secret scrubbing
 │   │       └── worker_runner.py         # Isolated Python worker with Student's t critical values & stats
+│   ├── server/
+│   │   ├── index.ts                     # HTTP server entry point & middleware pipeline
+│   │   ├── helpers.ts                   # Error response formatting, auth extraction, route utilities
+│   │   ├── types.ts                     # Server configuration & HTTP context definitions
+│   │   └── routes/                      # Modular route handlers (auth, dataset, analysis, scheduler, bi, etc.)
 │   ├── frontend/
 │   │   ├── main.tsx                     # React 19 application entry point
-│   │   ├── App.tsx                      # Dashboard UI (header, filters, KPIs, charts, table)
+│   │   ├── App.tsx                      # Root shell with top navigation, auth state, and lazy routing
 │   │   ├── sample-spec.ts               # Pre-compiled DashboardSpec artifact for demo
 │   │   ├── styles.css                   # Glassmorphic dark theme, responsive grid
 │   │   └── components/
+│   │       ├── TopNavBar.tsx            # Global header, user profile, role badge, session status
+│   │       ├── DashboardView.tsx        # Dynamic dashboard with KPIs, ECharts, slicers, and data table
+│   │       ├── DatasetsView.tsx         # Dataset upload, schema profiling, and column inspection
+│   │       ├── AnalyzeView.tsx          # Business question submission, ambiguity modal, progress tracker
+│   │       ├── HistoryView.tsx          # Execution history, stage telemetry, and artifact access
+│   │       ├── SchedulesBiView.tsx      # Recurring schedules, webhook delivery channels, Superset BI sync
+│   │       ├── AuthView.tsx             # Multi-tenant login & organization registration forms
 │   │       ├── KpiCard.tsx              # Executive KPI headline metrics
 │   │       ├── EChartsChart.tsx         # Apache ECharts wrapper (bar/donut/line/scatter/hist)
 │   │       ├── FilterBar.tsx            # Real-time interactive slicers

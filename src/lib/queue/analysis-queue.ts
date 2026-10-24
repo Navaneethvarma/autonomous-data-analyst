@@ -3,27 +3,39 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
-import { DatabaseAdapter } from '../db/adapter.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import {
+  AnalysisRepository,
+  type IAnalysisRepository,
+  DatasetRepository,
+  type IDatasetRepository,
+} from '../db/repositories/index.js';
 import { AnalysisRecord } from '../db/types.js';
 import { AnalyticalWorkflowOrchestrator, isTransientError } from '../workflow/orchestrator.js';
 import { WorkflowResult } from '../workflow/types.js';
 import { assertTenantScope, AuthorizationError } from '../auth/rbac.js';
 
-export interface AnalysisJobPayload {
-  analysisId: string;
-  organizationId: string;
-  userId: string;
-  datasetId: string;
-  datasetPath: string;
-  userQuery: string;
+import type {
+  AnalysisJobPayload,
+  AnalysisQueueAdapter,
+} from '../../types/analysis.types.js';
+
+export type { AnalysisJobPayload, AnalysisQueueAdapter };
+
+export interface AnalysisQueueRepositories {
+  analysisRepo: IAnalysisRepository;
+  datasetRepo: IDatasetRepository;
 }
 
-export interface AnalysisQueueAdapter {
-  submitJob(payload: AnalysisJobPayload): Promise<{ jobId: string }>;
-  cancelJob(jobId: string, organizationId: string): Promise<boolean>;
-  getJobStatus(jobId: string, organizationId: string): Promise<AnalysisRecord | null>;
-  close(): Promise<void>;
-  isReady(): boolean;
+export function resolveQueueRepos(dbOrRepos: DatabaseAdapter | AnalysisQueueRepositories): AnalysisQueueRepositories {
+  if ('createAnalysis' in dbOrRepos && 'getDatasetById' in dbOrRepos) {
+    const db = dbOrRepos as DatabaseAdapter;
+    return {
+      analysisRepo: new AnalysisRepository(db),
+      datasetRepo: new DatasetRepository(db),
+    };
+  }
+  return dbOrRepos as AnalysisQueueRepositories;
 }
 
 /**
@@ -31,22 +43,24 @@ export interface AnalysisQueueAdapter {
  * Independently resolves dataset from DB and validates tenant scope before opening files.
  */
 export async function processAnalysisJob(
-  db: DatabaseAdapter,
+  dbOrRepos: DatabaseAdapter | AnalysisQueueRepositories,
   payload: AnalysisJobPayload,
   signal?: AbortSignal,
   onProgress?: (stage: string, percent: number, message: string) => void
 ): Promise<WorkflowResult> {
+  const { analysisRepo, datasetRepo } = resolveQueueRepos(dbOrRepos);
+
   // Check if job was already cancelled before execution began
-  const initialCheck = await db.getAnalysisById(payload.analysisId, payload.organizationId);
+  const initialCheck = await analysisRepo.findById(payload.analysisId, payload.organizationId);
   if (initialCheck && (initialCheck.status === 'cancelled' || signal?.aborted)) {
     throw new Error('Analysis job was cancelled before execution started.');
   }
 
   // 1. Worker independent dataset verification & tenant authorization
-  const dataset = await db.getDatasetById(payload.datasetId, payload.organizationId);
+  const dataset = await datasetRepo.findById(payload.datasetId, payload.organizationId);
   if (!dataset) {
     const errorMsg = `Dataset authorization error: dataset '${payload.datasetId}' is unauthorized or does not exist for tenant '${payload.organizationId}'.`;
-    await db.updateAnalysis(payload.analysisId, {
+    await analysisRepo.update(payload.analysisId, {
       status: 'failed',
       stage: 'failed',
       errorMessage: errorMsg,
@@ -68,7 +82,7 @@ export async function processAnalysisJob(
   const relPath = path.relative(allowedDatasetBase, resolvedPath);
   if (relPath.startsWith('..') || path.isAbsolute(relPath)) {
     const errorMsg = 'Dataset storage path escapes authorized tenant dataset boundary.';
-    await db.updateAnalysis(payload.analysisId, {
+    await analysisRepo.update(payload.analysisId, {
       status: 'failed',
       stage: 'failed',
       errorMessage: errorMsg,
@@ -79,7 +93,7 @@ export async function processAnalysisJob(
 
   if (!fs.existsSync(resolvedPath)) {
     const errorMsg = `Dataset file not found at authorized path.`;
-    await db.updateAnalysis(payload.analysisId, {
+    await analysisRepo.update(payload.analysisId, {
       status: 'failed',
       stage: 'failed',
       errorMessage: errorMsg,
@@ -90,7 +104,7 @@ export async function processAnalysisJob(
 
   const orchestrator = new AnalyticalWorkflowOrchestrator();
 
-  await db.updateAnalysis(payload.analysisId, {
+  await analysisRepo.update(payload.analysisId, {
     status: 'running',
     stage: 'inspection',
     progressPercent: 10,
@@ -114,7 +128,7 @@ export async function processAnalysisJob(
       signal,
       onProgress: async (stage, percent, message) => {
         try {
-          await db.updateAnalysis(payload.analysisId, {
+          await analysisRepo.update(payload.analysisId, {
             stage,
             progressPercent: percent,
           });
@@ -129,7 +143,7 @@ export async function processAnalysisJob(
   );
 
   // Cancellation race check: do not overwrite cancelled status if cancelled concurrently
-  const finalCheck = await db.getAnalysisById(payload.analysisId, payload.organizationId);
+  const finalCheck = await analysisRepo.findById(payload.analysisId, payload.organizationId);
   if (finalCheck && finalCheck.status === 'cancelled') {
     return result;
   }
@@ -143,7 +157,7 @@ export async function processAnalysisJob(
   }
 
   // Update Analysis Record
-  await db.updateAnalysis(payload.analysisId, {
+  await analysisRepo.update(payload.analysisId, {
     status: finalStatus,
     stage: 'completed',
     progressPercent: 100,
@@ -161,12 +175,12 @@ export async function processAnalysisJob(
   });
 
   // Reprocessing check: deduplicate existing artifacts for this analysis
-  const existingArtifacts = await db.listArtifactsByAnalysis(payload.analysisId, payload.organizationId);
+  const existingArtifacts = await analysisRepo.listArtifacts(payload.analysisId, payload.organizationId);
   const existingTypes = new Set(existingArtifacts.map(a => a.artifactType));
 
   // Save generated artifacts to DB
   if (result.generatedArtifacts.dashboardSpec && !existingTypes.has('dashboard_spec')) {
-    await db.createArtifact({
+    await analysisRepo.createArtifact({
       id: crypto.randomUUID(),
       organizationId: payload.organizationId,
       analysisId: payload.analysisId,
@@ -184,7 +198,7 @@ export async function processAnalysisJob(
     !existingTypes.has('report_html')
   ) {
     const stats = fs.statSync(result.generatedArtifacts.reportHtmlPath);
-    await db.createArtifact({
+    await analysisRepo.createArtifact({
       id: crypto.randomUUID(),
       organizationId: payload.organizationId,
       analysisId: payload.analysisId,
@@ -202,7 +216,7 @@ export async function processAnalysisJob(
     !existingTypes.has('report_pdf')
   ) {
     const stats = fs.statSync(result.generatedArtifacts.reportPdfPath);
-    await db.createArtifact({
+    await analysisRepo.createArtifact({
       id: crypto.randomUUID(),
       organizationId: payload.organizationId,
       analysisId: payload.analysisId,
@@ -220,14 +234,20 @@ export async function processAnalysisJob(
 /**
  * Reconciles interrupted jobs on system startup, marking lingering 'running' jobs as failed.
  */
-export async function reconcileInterruptedJobs(db: DatabaseAdapter, organizationId?: string): Promise<number> {
+export async function reconcileInterruptedJobs(
+  dbOrRepo: DatabaseAdapter | IAnalysisRepository,
+  organizationId?: string
+): Promise<number> {
+  const analysisRepo = 'createAnalysis' in dbOrRepo && 'getAnalysisById' in dbOrRepo && 'init' in dbOrRepo
+    ? new AnalysisRepository(dbOrRepo as DatabaseAdapter)
+    : (dbOrRepo as IAnalysisRepository);
   let reconciledCount = 0;
 
   if (organizationId) {
-    const analyses = await db.listAnalysesByOrg(organizationId);
+    const analyses = await analysisRepo.listForOrganization(organizationId);
     for (const a of analyses) {
       if (a.status === 'running') {
-        await db.updateAnalysis(a.id, {
+        await analysisRepo.update(a.id, {
           status: 'failed',
           stage: 'failed',
           errorMessage: 'Job interrupted by application restart or worker crash. Eligible for re-submission.',
@@ -247,8 +267,14 @@ export async function reconcileInterruptedJobs(db: DatabaseAdapter, organization
 export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
   private abortControllers = new Map<string, AbortController>();
   private activeJobs = new Set<string>();
+  private analysisRepo: IAnalysisRepository;
+  private datasetRepo: IDatasetRepository;
 
-  constructor(private db: DatabaseAdapter) {}
+  constructor(dbOrRepos: DatabaseAdapter | AnalysisQueueRepositories) {
+    const repos = resolveQueueRepos(dbOrRepos);
+    this.analysisRepo = repos.analysisRepo;
+    this.datasetRepo = repos.datasetRepo;
+  }
 
   isReady(): boolean {
     return true;
@@ -260,7 +286,7 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
     this.abortControllers.set(jobId, controller);
 
     // Update job id on analysis
-    await this.db.updateAnalysis(payload.analysisId, {
+    await this.analysisRepo.update(payload.analysisId, {
       jobId,
       status: 'queued',
       stage: 'queued',
@@ -275,7 +301,7 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
 
       while (!success && retriesLeft >= 0) {
         if (controller.signal.aborted) {
-          await this.db.updateAnalysis(payload.analysisId, {
+          await this.analysisRepo.update(payload.analysisId, {
             status: 'cancelled',
             stage: 'cancelled',
             errorMessage: 'Job was cancelled by user.',
@@ -284,11 +310,11 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
         }
 
         try {
-          await processAnalysisJob(this.db, payload, controller.signal);
+          await processAnalysisJob({ analysisRepo: this.analysisRepo, datasetRepo: this.datasetRepo }, payload, controller.signal);
           success = true;
         } catch (err: any) {
           if (controller.signal.aborted || err.message?.includes('cancelled')) {
-            await this.db.updateAnalysis(payload.analysisId, {
+            await this.analysisRepo.update(payload.analysisId, {
               status: 'cancelled',
               stage: 'cancelled',
               errorMessage: 'Job was cancelled by user.',
@@ -299,14 +325,14 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
           const isTransient = isTransientError(err);
           if (isTransient && retriesLeft > 0) {
             retriesLeft--;
-            await this.db.updateAnalysis(payload.analysisId, {
+            await this.analysisRepo.update(payload.analysisId, {
               retryCount: 2 - retriesLeft,
               errorMessage: `Transient error, retrying: ${err.message}`,
             });
             await new Promise(res => setTimeout(res, 500));
           } else {
             // Permanent failure or retry budget exhausted
-            await this.db.updateAnalysis(payload.analysisId, {
+            await this.analysisRepo.update(payload.analysisId, {
               status: 'failed',
               stage: 'failed',
               errorMessage: err.message || String(err),
@@ -324,7 +350,7 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
   }
 
   async cancelJob(jobId: string, organizationId: string): Promise<boolean> {
-    const analysis = await this.db.getAnalysisByJobId(jobId);
+    const analysis = await this.analysisRepo.findByJobId(jobId);
     if (!analysis) return false;
     assertTenantScope(organizationId, analysis.organizationId, 'Analysis Job');
 
@@ -333,7 +359,7 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
       controller.abort();
     }
 
-    await this.db.updateAnalysis(analysis.id, {
+    await this.analysisRepo.update(analysis.id, {
       status: 'cancelled',
       stage: 'cancelled',
       errorMessage: 'Job was cancelled by user.',
@@ -342,7 +368,7 @@ export class InMemoryAnalysisQueue implements AnalysisQueueAdapter {
   }
 
   async getJobStatus(jobId: string, organizationId: string): Promise<AnalysisRecord | null> {
-    const analysis = await this.db.getAnalysisByJobId(jobId);
+    const analysis = await this.analysisRepo.findByJobId(jobId);
     if (!analysis) return null;
     assertTenantScope(organizationId, analysis.organizationId, 'Analysis Job');
     return analysis;
@@ -365,11 +391,17 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
   private worker: Worker;
   private redisConnection: IORedis.Redis;
   private activeControllers = new Map<string, AbortController>();
+  private analysisRepo: IAnalysisRepository;
+  private datasetRepo: IDatasetRepository;
 
   constructor(
-    private db: DatabaseAdapter,
+    dbOrRepos: DatabaseAdapter | AnalysisQueueRepositories,
     redisUrl: string
   ) {
+    const repos = resolveQueueRepos(dbOrRepos);
+    this.analysisRepo = repos.analysisRepo;
+    this.datasetRepo = repos.datasetRepo;
+
     this.redisConnection = new IORedis.default(redisUrl, { maxRetriesPerRequest: null });
     this.queue = new Queue('analysis-jobs', { connection: this.redisConnection });
 
@@ -380,9 +412,14 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
         this.activeControllers.set(job.id || '', controller);
 
         try {
-          await processAnalysisJob(this.db, job.data, controller.signal, async (stage, percent) => {
-            await job.updateProgress({ stage, percent });
-          });
+          await processAnalysisJob(
+            { analysisRepo: this.analysisRepo, datasetRepo: this.datasetRepo },
+            job.data,
+            controller.signal,
+            async (stage, percent) => {
+              await job.updateProgress({ stage, percent });
+            }
+          );
         } finally {
           this.activeControllers.delete(job.id || '');
         }
@@ -405,7 +442,7 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
     });
     const jobId = job.id || `job_${crypto.randomUUID()}`;
 
-    await this.db.updateAnalysis(payload.analysisId, {
+    await this.analysisRepo.update(payload.analysisId, {
       jobId,
       status: 'queued',
       stage: 'queued',
@@ -416,7 +453,7 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
   }
 
   async cancelJob(jobId: string, organizationId: string): Promise<boolean> {
-    const analysis = await this.db.getAnalysisByJobId(jobId);
+    const analysis = await this.analysisRepo.findByJobId(jobId);
     if (!analysis) return false;
     assertTenantScope(organizationId, analysis.organizationId, 'Analysis Job');
 
@@ -434,7 +471,7 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
       }
     }
 
-    await this.db.updateAnalysis(analysis.id, {
+    await this.analysisRepo.update(analysis.id, {
       status: 'cancelled',
       stage: 'cancelled',
       errorMessage: 'Job was cancelled by user.',
@@ -443,7 +480,7 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
   }
 
   async getJobStatus(jobId: string, organizationId: string): Promise<AnalysisRecord | null> {
-    const analysis = await this.db.getAnalysisByJobId(jobId);
+    const analysis = await this.analysisRepo.findByJobId(jobId);
     if (!analysis) return null;
     assertTenantScope(organizationId, analysis.organizationId, 'Analysis Job');
     return analysis;
@@ -458,7 +495,7 @@ export class BullMqAnalysisQueue implements AnalysisQueueAdapter {
 
 let activeQueue: AnalysisQueueAdapter | null = null;
 
-export function getAnalysisQueue(db: DatabaseAdapter, forceMemory = false): AnalysisQueueAdapter {
+export function getAnalysisQueue(dbOrRepos: DatabaseAdapter | AnalysisQueueRepositories, forceMemory = false): AnalysisQueueAdapter {
   if (activeQueue) return activeQueue;
 
   const isProduction = process.env.NODE_ENV === 'production';
@@ -476,7 +513,7 @@ export function getAnalysisQueue(db: DatabaseAdapter, forceMemory = false): Anal
       );
     }
     try {
-      activeQueue = new BullMqAnalysisQueue(db, redisUrl);
+      activeQueue = new BullMqAnalysisQueue(dbOrRepos, redisUrl);
       return activeQueue;
     } catch (err: any) {
       const sanitized = (redisUrl || '').replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@');
@@ -487,17 +524,18 @@ export function getAnalysisQueue(db: DatabaseAdapter, forceMemory = false): Anal
   // Development and test environments
   if (!forceMemory && redisUrl && process.env.NODE_ENV !== 'test') {
     try {
-      activeQueue = new BullMqAnalysisQueue(db, redisUrl);
+      activeQueue = new BullMqAnalysisQueue(dbOrRepos, redisUrl);
       return activeQueue;
     } catch {
       // Fallback to in-memory if Redis connection fails in development
     }
   }
 
-  activeQueue = new InMemoryAnalysisQueue(db);
+  activeQueue = new InMemoryAnalysisQueue(dbOrRepos);
   return activeQueue;
 }
 
 export function setAnalysisQueue(queue: AnalysisQueueAdapter | null): void {
   activeQueue = queue;
 }
+

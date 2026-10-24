@@ -1,5 +1,15 @@
 import crypto from 'node:crypto';
-import { DatabaseAdapter } from '../db/adapter.js';
+import type { DatabaseAdapter } from '../db/types.js';
+import {
+  ScheduleRepository,
+  type IScheduleRepository,
+  DatasetRepository,
+  type IDatasetRepository,
+  AnalysisRepository,
+  type IAnalysisRepository,
+  AuditRepository,
+  type IAuditRepository,
+} from '../db/repositories/index.js';
 import { AnalysisQueueAdapter } from '../queue/analysis-queue.js';
 import { ScheduleRecord } from '../db/types.js';
 import { TimezoneScheduler } from './timezone.js';
@@ -13,20 +23,58 @@ export interface SchedulerDaemonOptions {
   maxMissedRunsToReconcile?: number;
 }
 
+export interface SchedulerDaemonRepositories {
+  scheduleRepo: IScheduleRepository;
+  datasetRepo: IDatasetRepository;
+  analysisRepo: IAnalysisRepository;
+  auditRepo: IAuditRepository;
+  deliveryService?: DeliveryService;
+  biService?: BiIntegrationService;
+}
+
 export class SchedulerDaemon {
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private scheduleRepo: IScheduleRepository;
+  private datasetRepo: IDatasetRepository;
+  private analysisRepo: IAnalysisRepository;
+  private auditRepo: IAuditRepository;
   private deliveryService: DeliveryService;
   private biService: BiIntegrationService;
   private inFlightDispatches = new Set<string>(); // In-process lock token per scheduleId
 
   constructor(
-    private db: DatabaseAdapter,
+    dbOrRepos: DatabaseAdapter | SchedulerDaemonRepositories,
     private queue: AnalysisQueueAdapter,
     private options: SchedulerDaemonOptions = {}
   ) {
-    this.deliveryService = new DeliveryService(db);
-    this.biService = new BiIntegrationService(db);
+    if ('createSchedule' in dbOrRepos && 'getScheduleById' in dbOrRepos) {
+      const db = dbOrRepos as DatabaseAdapter;
+      this.scheduleRepo = new ScheduleRepository(db);
+      this.datasetRepo = new DatasetRepository(db);
+      this.analysisRepo = new AnalysisRepository(db);
+      this.auditRepo = new AuditRepository(db);
+      this.deliveryService = new DeliveryService(db);
+      this.biService = new BiIntegrationService(db);
+    } else {
+      const repos = dbOrRepos as SchedulerDaemonRepositories;
+      this.scheduleRepo = repos.scheduleRepo;
+      this.datasetRepo = repos.datasetRepo;
+      this.analysisRepo = repos.analysisRepo;
+      this.auditRepo = repos.auditRepo;
+      this.deliveryService = repos.deliveryService || new DeliveryService({
+        deliveryRepo: repos.scheduleRepo as any,
+        scheduleRepo: repos.scheduleRepo,
+        analysisRepo: repos.analysisRepo,
+        auditRepo: repos.auditRepo,
+      } as any);
+      this.biService = repos.biService || new BiIntegrationService({
+        biRepo: repos.scheduleRepo as any,
+        auditRepo: repos.auditRepo,
+        analysisRepo: repos.analysisRepo,
+        scheduleRepo: repos.scheduleRepo,
+      } as any);
+    }
   }
 
   /**
@@ -67,7 +115,7 @@ export class SchedulerDaemon {
     const currentTime = nowIso ? new Date(nowIso) : new Date();
     const currentIso = currentTime.toISOString();
 
-    const dueSchedules = await this.db.listDueSchedules(currentIso);
+    const dueSchedules = await this.scheduleRepo.listDue(currentIso);
     let dispatchedCount = 0;
     let skippedCount = 0;
 
@@ -91,7 +139,7 @@ export class SchedulerDaemon {
     const graceMs = this.options.gracePeriodMs || 60000; // 1 minute default grace period
     const overdueCutoff = new Date(now.getTime() - graceMs).toISOString();
 
-    const overdueSchedules = await this.db.listDueSchedules(overdueCutoff);
+    const overdueSchedules = await this.scheduleRepo.listDue(overdueCutoff);
     let reconciledCount = 0;
 
     for (const schedule of overdueSchedules) {
@@ -109,13 +157,13 @@ export class SchedulerDaemon {
         }
       }
 
-      await this.db.updateSchedule(schedule.id, {
+      await this.scheduleRepo.update(schedule.id, {
         nextRunAt: updatedNextRun,
         status: updatedNextRun ? 'active' : 'completed',
         isEnabled: updatedNextRun !== null,
       });
 
-      await this.db.createAuditLog({
+      await this.auditRepo.create({
         id: `audit_${crypto.randomUUID()}`,
         organizationId: schedule.organizationId,
         action: 'schedule:missed_run_reconciled',
@@ -150,7 +198,7 @@ export class SchedulerDaemon {
 
     try {
       // 1. Concurrency limit check: protect against overlapping executions
-      const activeCount = await this.db.getActiveRunCount(schedule.id);
+      const activeCount = await this.scheduleRepo.getActiveRunCount(schedule.id);
       if (activeCount >= schedule.concurrencyLimit) {
         // Concurrency limit reached: skip dispatch this tick
         return false;
@@ -173,7 +221,7 @@ export class SchedulerDaemon {
         isEnabled = false;
       }
 
-      await this.db.updateSchedule(schedule.id, {
+      await this.scheduleRepo.update(schedule.id, {
         nextRunAt,
         lastRunAt: scheduledFor,
         status: newStatus,
@@ -191,10 +239,10 @@ export class SchedulerDaemon {
    * Submits an analysis job to the queue and records the schedule run.
    */
   private async executeScheduleRun(schedule: ScheduleRecord, scheduledFor: string): Promise<boolean> {
-    const dataset = await this.db.getDatasetById(schedule.datasetId, schedule.organizationId);
+    const dataset = await this.datasetRepo.findById(schedule.datasetId, schedule.organizationId);
     if (!dataset) {
       // Dataset deleted or unauthorized
-      await this.db.updateSchedule(schedule.id, { status: 'failed', isEnabled: false });
+      await this.scheduleRepo.update(schedule.id, { status: 'failed', isEnabled: false });
       return false;
     }
 
@@ -203,7 +251,7 @@ export class SchedulerDaemon {
     const jobId = `job_${crypto.randomUUID()}`;
 
     // 1. Create Analysis record
-    await this.db.createAnalysis({
+    await this.analysisRepo.create({
       id: analysisId,
       organizationId: schedule.organizationId,
       userId: schedule.createdByUserId,
@@ -217,7 +265,7 @@ export class SchedulerDaemon {
     });
 
     // 2. Create Schedule Run record
-    await this.db.createScheduleRun({
+    await this.scheduleRepo.createRun({
       id: runId,
       scheduleId: schedule.id,
       organizationId: schedule.organizationId,
@@ -243,7 +291,7 @@ export class SchedulerDaemon {
       this.monitorAndDeliver(schedule, runId, analysisId).catch(() => {});
       return true;
     } catch (err: any) {
-      await this.db.updateScheduleRun(runId, {
+      await this.scheduleRepo.updateRun(runId, {
         status: 'failed',
         completedAt: new Date().toISOString(),
         errorMessage: redactSensitiveData(err.message || 'Failed to submit analysis job'),
@@ -265,7 +313,7 @@ export class SchedulerDaemon {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      const analysis = await this.db.getAnalysisById(analysisId, schedule.organizationId);
+      const analysis = await this.analysisRepo.findById(analysisId, schedule.organizationId);
       if (!analysis) break;
 
       if (analysis.status === 'completed') {
@@ -299,7 +347,7 @@ export class SchedulerDaemon {
         }
 
         // 3. Mark schedule run completed
-        await this.db.updateScheduleRun(scheduleRunId, {
+        await this.scheduleRepo.updateRun(scheduleRunId, {
           status: 'completed',
           completedAt: new Date().toISOString(),
         });
@@ -307,7 +355,7 @@ export class SchedulerDaemon {
       }
 
       if (analysis.status === 'failed' || analysis.status === 'cancelled') {
-        await this.db.updateScheduleRun(scheduleRunId, {
+        await this.scheduleRepo.updateRun(scheduleRunId, {
           status: 'failed',
           completedAt: new Date().toISOString(),
           errorMessage: analysis.errorMessage || 'Analysis execution failed',

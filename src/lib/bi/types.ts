@@ -1,32 +1,9 @@
-export interface SupersetCredentials {
-  username: string;
-  password: string;
-  provider?: 'db' | 'ldap';
-}
-
-export interface SupersetDatasetSummary {
-  id: number;
-  tableName: string;
-  schema?: string;
-  databaseName?: string;
-  description?: string;
-}
-
-export interface SupersetChartPublishRequest {
-  sliceName: string;
-  vizType: string;
-  datasourceId: number;
-  datasourceType?: 'table';
-  params?: Record<string, any>;
-  description?: string;
-}
-
-export interface SupersetChartSummary {
-  id: number;
-  sliceName: string;
-  vizType: string;
-  url: string;
-}
+export type {
+  SupersetCredentials,
+  SupersetDatasetSummary,
+  SupersetChartPublishRequest,
+  SupersetChartSummary,
+} from '../../types/bi.types.js';
 
 export class BiIntegrationError extends Error {
   public statusCode?: number;

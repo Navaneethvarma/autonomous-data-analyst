@@ -1,4 +1,4 @@
-import { UserRole } from '../db/types.js';
+import type { UserRole } from '../../types/user.types.js';
 
 export type Permission =
   | 'dataset:read'

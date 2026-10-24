@@ -12,6 +12,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'descriptive_stats',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['x'],
       parameters: { column: 'x' },
     };
@@ -44,6 +45,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'regression',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['x', 'y'],
       parameters: { independentColumn: 'x', dependentColumn: 'y' },
     };
@@ -69,6 +71,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'group_comparison',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['x', 'group'],
       parameters: {
         metricColumn: 'x',
@@ -102,6 +105,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'anova',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['y', 'group'],
       parameters: { metricColumn: 'y', groupColumn: 'group' },
     };
@@ -124,6 +128,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'chi_square',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['group', 'status'],
       parameters: { column1: 'group', column2: 'status' },
     };
@@ -140,6 +145,7 @@ describe('Python Statistical Correctness & Deterministic Fixtures (M8)', { timeo
       taskType: 'time_series',
       datasetId: 'fixture_dataset',
       datasetPath: fixturePath,
+      limits: { timeoutMs: 20000 },
       columns: ['date', 'y'],
       parameters: { dateColumn: 'date', valueColumn: 'y', forecastSteps: 3 },
     };

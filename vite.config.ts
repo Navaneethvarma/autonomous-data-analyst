@@ -14,5 +14,13 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist/client',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          echarts: ['echarts', 'echarts-for-react'],
+        },
+      },
+    },
   },
 });
