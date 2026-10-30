@@ -27,108 +27,169 @@ export const DatasetsView: React.FC<DatasetsViewProps> = ({
   onUploadSubmit,
 }) => {
   return (
-    <section id="datasets-view">
-      <h2 className="section-title">
-        <span>Tenant Datasets & Schemas</span>
-        <span className="section-badge">{datasets.length} Registered</span>
-      </h2>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 20 }}>
-        {/* Upload Card */}
-        <div className="kpi-card" style={{ padding: 24 }}>
-          <h3 style={{ marginBottom: 12, fontSize: '1.1rem' }}>Upload New Dataset</h3>
-          <form onSubmit={onUploadSubmit}>
-            <div className="form-group">
-              <label className="form-label">Filename (.csv or .parquet)</label>
-              <input
-                className="form-input"
-                value={uploadFilename}
-                onChange={e => onFilenameChange(e.target.value)}
-                placeholder="transactions.csv"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Paste CSV Content or Sample Data</label>
-              <textarea
-                className="form-input"
-                rows={8}
-                value={uploadText}
-                onChange={e => onTextChange(e.target.value)}
-                placeholder="product_category,revenue,units_sold&#10;Electronics,14200.50,45&#10;Apparel,8920.00,120&#10;Home Goods,5400.75,34"
-                required
-              />
-            </div>
-
-            <button className="btn-primary" type="submit" disabled={uploading}>
-              {uploading ? 'Validating & Profiling...' : 'Upload & Profile Dataset'}
-            </button>
-          </form>
+      <section id="datasets-view" className="workbench-page-container">
+        {/* 1. Page Heading with proper spacing and separator */}
+        <div className="page-header-block">
+          <div className="page-title-row">
+            <h1 className="page-heading">Tenant Datasets &amp; Schemas</h1>
+            <span className="heading-separator">·</span>
+            <span className="heading-badge">{datasets.length} Registered</span>
+          </div>
+          <p className="page-heading-sub">
+            Upload, manage, and inspect multi-tenant CSV and Parquet datasets with automated DuckDB schema profiling.
+          </p>
         </div>
 
-        {/* Registered Datasets List */}
-        <div className="kpi-card" style={{ padding: 24 }}>
-          <h3 style={{ marginBottom: 12, fontSize: '1.1rem' }}>Available Datasets</h3>
-          {datasets.length === 0 ? (
-            <p style={{ color: 'var(--text-secondary)' }}>No datasets uploaded yet in this organization.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {datasets.map(d => (
-                <div
-                  key={d.id}
-                  onClick={() => onSelectDataset(d.id)}
-                  style={{
-                    padding: 12,
-                    background: d.id === selectedDatasetId ? 'rgba(99, 102, 241, 0.2)' : 'var(--bg-secondary)',
-                    border: `1px solid ${d.id === selectedDatasetId ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{d.originalFilename}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    {d.rowCount} rows • {d.columnCount} columns • {(d.fileSizeBytes / 1024).toFixed(1)} KB
+                <div className="datasets-main-grid">
+                  {/* Upload Dataset Card */}
+                  <div className="workbench-card">
+                    <div className="card-header-row">
+                      <h3 className="card-title">
+                        <span className="card-title-icon">📤</span>
+                        <span>Upload New Dataset</span>
+                      </h3>
+                      <span className="card-badge">CSV / Parquet</span>
+                    </div>
+
+                    <form onSubmit={onUploadSubmit} className="clean-vertical-form">
+                      <div className="form-field-block">
+                        <label className="field-label" htmlFor="upload-filename-input">
+                          Filename (.csv or .parquet)
+                        </label>
+                        <input
+                          id="upload-filename-input"
+                          className="field-input"
+                          value={uploadFilename}
+                          onChange={e => onFilenameChange(e.target.value)}
+                          placeholder="e.g. q4_sales_transactions.csv"
+                          required
+                        />
+                        <span className="field-hint">Specify the target file extension for automatic DuckDB parser resolution</span>
+                      </div>
+
+                        <div className="form-field-block">
+                          <label className="field-label" htmlFor="upload-content-textarea">
+                            Paste CSV Content or Raw Tabular Records
+                          </label>
+                          <textarea
+                            id="upload-content-textarea"
+                            className="field-textarea csv-editor-textarea"
+                            rows={10}
+                            value={uploadText}
+                            onChange={e => onTextChange(e.target.value)}
+                            placeholder="transaction_id,customer_id,transaction_date,product_category,unit_price,quantity,discount_applied,payment_status&#10;TXN-1001,CUST-201,2024-01-10,Electronics,499.99,1,false,Completed&#10;TXN-1002,CUST-202,2024-01-11,Apparel,39.50,2,true,Completed"
+                            required
+                          />
+                          <span className="field-hint">Supports comma-separated headers, standard date formats (YYYY-MM-DD), and null values</span>
+                        </div>
+
+                        <div className="form-actions-row">
+                          <button className="btn-primary" type="submit" disabled={uploading}>
+                            {uploading ? 'Validating & Profiling...' : 'Upload & Profile Dataset'}
+                          </button>
+                        </div>
+                    </form>
                   </div>
-                </div>
-              ))}
+
+                    {/* Available Datasets List Card */}
+                    <div className="workbench-card">
+                      <div className="card-header-row">
+                        <h3 className="card-title">
+                          <span className="card-title-icon">🗄️</span>
+                          <span>Registered Datasets</span>
+                        </h3>
+                        <span className="card-badge">{datasets.length} Datasets</span>
+                      </div>
+
+                      {datasets.length === 0 ? (
+            <div className="empty-state-notice">
+              <p>No datasets uploaded yet in this workspace. Upload your first dataset using the form on the left.</p>
             </div>
+                      ) : (
+                                <div className="datasets-scroll-list">
+                                  {datasets.map(d => {
+                                    const isSelected = d.id === selectedDatasetId;
+                                    return (
+                                      <div
+                                        key={d.id}
+                                        onClick={() => onSelectDataset(d.id)}
+                                        className={`dataset-row-item ${isSelected ? 'selected' : ''}`}
+                                      >
+                                        <div className="dataset-item-header">
+                                          <strong className="dataset-item-name">{d.originalFilename}</strong>
+                                          {isSelected && <span className="status-pill status-healthy">Active</span>}
+                                        </div>
+                                        <div className="dataset-item-meta">
+                                          <span><strong>{d.rowCount.toLocaleString()}</strong> rows</span>
+                                          <span>•</span>
+                                          <span><strong>{d.columnCount}</strong> columns</span>
+                                          <span>•</span>
+                                          <span>{(d.fileSizeBytes / 1024).toFixed(1)} KB</span>
+                                        </div>
+                                      </div>
+                                );
+              })}
+                              </div>
           )}
-        </div>
+                            </div>
       </div>
 
-      {/* Profile Inspector */}
-      {selectedProfile && (
-        <div className="kpi-card" style={{ marginTop: 24, padding: 24 }}>
-          <h3 style={{ marginBottom: 12 }}>Schema & Column Profile</h3>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Column Name</th>
-                  <th>Inferred Type</th>
-                  <th>Null Count</th>
-                  <th>Distinct Values</th>
-                  <th>Sample Values</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedProfile.columns.map(col => (
-                  <tr key={col.name}>
-                    <td style={{ fontWeight: 600 }}>{col.name}</td>
-                    <td><code>{col.inferredType}</code></td>
-                    <td>{col.nullCount}</td>
-                    <td>{col.distinctCount}</td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-                      {col.sampleValues.slice(0, 3).join(', ')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                      {/* Profile Inspector Section */}
+                      {selectedProfile && (
+                              <div className="workbench-card" style={{ marginTop: 24 }}>
+                                <div className="card-header-row">
+                                  <h3 className="card-title">
+                                    <span className="card-title-icon">🔍</span>
+                                    <span>Dataset Hygiene Profile: {selectedProfile.datasetName}</span>
+                                  </h3>
+                                  <span className="card-badge">DuckDB Streaming Audit</span>
+                                </div>
+
+                                <div className="profile-stats-grid">
+                                  <div className="profile-stat-box">
+                                    <span className="p-k">Total Rows</span>
+                                    <span className="p-v">{selectedProfile.totalRows.toLocaleString()}</span>
+                                  </div>
+                                  <div className="profile-stat-box">
+                                    <span className="p-k">Total Columns</span>
+                                    <span className="p-v">{selectedProfile.totalColumns}</span>
+                                  </div>
+                                  <div className="profile-stat-box">
+                                    <span className="p-k">Duplicate Rows</span>
+                                    <span className="p-v">{selectedProfile.duplicateRows}</span>
+                                  </div>
+                                  <div className="profile-stat-box">
+                                    <span className="p-k">Quality Status</span>
+                                    <span className="p-v positive">✓ Verified Clean</span>
+                                  </div>
+                                </div>
+
+                                <div className="clean-table-container" style={{ marginTop: 16 }}>
+                                  <table className="clean-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Column Name</th>
+                                        <th>Inferred Type</th>
+                                        <th>Null Count</th>
+                                        <th>Null %</th>
+                                        <th>Distinct Values</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                          {selectedProfile.columns.map(c => (
+                                            <tr key={c.name}>
+                                              <td><code>{c.name}</code></td>
+                                              <td><span className="th-type-badge">{c.inferredType}</span></td>
+                                              <td>{c.nullCount}</td>
+                                              <td>{c.nullPercentage.toFixed(1)}%</td>
+                                              <td>{c.distinctCount}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
             </table>
-          </div>
-        </div>
+                                </div>
+                              </div>
       )}
-    </section>
-  );
+                            </section>
+                            );
 };

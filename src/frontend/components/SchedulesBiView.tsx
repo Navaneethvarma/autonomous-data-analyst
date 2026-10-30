@@ -83,343 +83,384 @@ export const SchedulesBiView: React.FC<SchedulesBiViewProps> = ({
   onDeleteBiConnection,
 }) => {
   return (
-    <section id="schedules-view">
-      <h2 className="section-title">
-        <span>Scheduled Autonomous Analyses & BI Integrations</span>
-        <span className="section-badge">{schedules.length} Active Schedules</span>
-      </h2>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 24, marginTop: 20 }}>
-        {/* Left Column: Schedules List & Creation */}
-        <div>
-          <div className="kpi-card" style={{ padding: 24, marginBottom: 24 }}>
-            <h3 style={{ marginBottom: 16, fontSize: '1.1rem' }}>📅 Recurring & One-Time Schedules</h3>
-
-            {schedules.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                No schedules configured yet. Create a recurring schedule below to automate recurring BI analyses.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {schedules.map(s => (
-                  <div
-                    key={s.id}
-                    style={{
-                      padding: 16,
-                      borderRadius: 8,
-                      background: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-color)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 600 }}>{s.name}</span>
-                        <span className={`role-pill role-${s.status === 'active' ? 'admin' : 'viewer'}`}>
-                          {s.status}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          {s.timezone}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                        Query: "{s.userQuery}"
-                      </div>
-                      <div style={{ fontSize: '0.8rem', marginTop: 4 }}>
-                        Cron: <code>{s.cronExpression || 'One-Time'}</code> • Next Run: <strong>{s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : 'N/A'}</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        className="btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                        onClick={() => onTriggerSchedule(s.id, s.name)}
-                      >
-                        ⚡ Run Now
-                      </button>
-                      <button
-                        className="btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.85rem', color: '#ff6b6b' }}
-                        onClick={() => onDeleteSchedule(s.id)}
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+      <section id="schedules-view" className="workbench-page-container">
+        {/* 1. Page Heading with proper spacing and separator */}
+        <div className="page-header-block">
+          <div className="page-title-row">
+            <h1 className="page-heading">Scheduled Analyses &amp; BI Integrations</h1>
+            <span className="heading-separator">·</span>
+            <span className="heading-badge">{schedules.length} Active Schedules</span>
           </div>
-
-          {/* Create Schedule Form */}
-          <div className="kpi-card" style={{ padding: 24 }}>
-            <h3 style={{ marginBottom: 16, fontSize: '1.1rem' }}>➕ New Scheduled Autonomous Analysis</h3>
-            <form onSubmit={onCreateSchedule}>
-              <div className="form-group">
-                <label className="form-label">Schedule Name</label>
-                <input
-                  className="form-input"
-                  value={scheduleName}
-                  onChange={e => onScheduleNameChange(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Analytical Business Question</label>
-                <textarea
-                  className="form-input"
-                  rows={3}
-                  value={scheduleQuery}
-                  onChange={e => onScheduleQueryChange(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div className="form-group">
-                  <label className="form-label">Schedule Type</label>
-                  <select
-                    className="form-input"
-                    value={scheduleType}
-                    onChange={e => onScheduleTypeChange(e.target.value as any)}
-                  >
-                    <option value="recurring">Recurring (Cron)</option>
-                    <option value="one_time">One-Time</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">IANA Timezone</label>
-                  <input
-                    className="form-input"
-                    value={scheduleTimezone}
-                    onChange={e => onScheduleTimezoneChange(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {scheduleType === 'recurring' ? (
-                <div className="form-group">
-                  <label className="form-label">5-Field Cron Expression</label>
-                  <input
-                    className="form-input"
-                    value={scheduleCron}
-                    onChange={e => onScheduleCronChange(e.target.value)}
-                    placeholder="0 9 * * 1 (Every Monday at 9am)"
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="form-group">
-                  <label className="form-label">Run Timestamp (ISO)</label>
-                  <input
-                    className="form-input"
-                    type="datetime-local"
-                    value={scheduleOneTimeAt}
-                    onChange={e => onScheduleOneTimeAtChange(new Date(e.target.value).toISOString())}
-                    required
-                  />
-                </div>
-              )}
-
-              <button className="btn-primary" type="submit" style={{ marginTop: 8 }}>
-                Create Schedule
-              </button>
-            </form>
-          </div>
+          <p className="page-heading-sub">
+            Automate recurring DuckDB analytical queries, trigger scheduled reports, and sync datasets with Apache Superset.
+          </p>
         </div>
 
-        {/* Right Column: Delivery Destinations & BI Connections */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Delivery Destinations */}
-          <div className="kpi-card" style={{ padding: 24 }}>
-            <h3 style={{ marginBottom: 12, fontSize: '1.1rem' }}>📬 Report Delivery Channels</h3>
-            {deliveryDestinations.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No delivery destinations yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {deliveryDestinations.map(d => (
-                  <div
-                    key={d.id}
-                    style={{
-                      padding: 10,
-                      borderRadius: 6,
-                      background: 'var(--bg-secondary)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    <div>
-                      <strong>{d.name}</strong> ({d.destinationType})
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                        {d.recipientEmails || d.webhookUrl}
-                      </div>
+              <div className="schedules-bi-layout">
+                {/* Left Column: Schedules Management */}
+                <div className="schedules-left-column">
+                  {/* Active Schedules List Card */}
+                  <div className="workbench-card">
+                    <div className="card-header-row">
+                      <h3 className="card-title">
+                        <span className="card-title-icon">📅</span>
+                        <span>Recurring &amp; One-Time Schedules</span>
+                      </h3>
+                      <span className="card-badge">{schedules.length} Configured</span>
                     </div>
-                    <button
-                      className="btn-secondary"
-                      style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#ff6b6b' }}
-                      onClick={() => onDeleteDeliveryDestination(d.id)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+
+                    {schedules.length === 0 ? (
+              <div className="empty-state-notice">
+                <p>No schedules configured yet. Create a schedule below to automate recurring analytical deliveries.</p>
               </div>
+                    ) : (
+                        <div className="schedules-list">
+                          {schedules.map(s => (
+                                    <div key={s.id} className="schedule-item-card">
+                                      <div className="schedule-item-main">
+                                        <div className="schedule-item-header">
+                                          <span className="schedule-name">{s.name}</span>
+                                          <span className={`status-pill ${s.status === 'active' ? 'status-healthy' : 'status-neutral'}`}>
+                                            {s.status.toUpperCase()}
+                                          </span>
+                                            <span className="schedule-type-tag">
+                                              {s.scheduleType === 'recurring' ? '⏱️ Cron' : '📌 One-time'}
+                                            </span>
+                                        </div>
+                                          <div className="schedule-query-text">{s.query}</div>
+                                          <div className="schedule-cron-meta">
+                                            <span>Expression: <code>{s.cronExpression || s.oneTimeAt}</code></span>
+                                            <span>•</span>
+                                            <span>Timezone: <code>{s.timezone}</code></span>
+                                          </div>
+                                        </div>
+                                          <div className="schedule-item-actions">
+                                            <button
+                                              className="btn-action-primary"
+                                              onClick={() => onTriggerSchedule(s.id, s.name)}
+                                              title="Trigger immediate execution"
+                                            >
+                                              ▶ Run Now
+                                            </button>
+                                            <button
+                                              className="btn-action-danger"
+                                              onClick={() => onDeleteSchedule(s.id)}
+                                              title="Delete schedule"
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                        </div>
+                ))}
+                                      </div>
+            )}
+                                    </div>
+
+                                          {/* Create Schedule Form Card */}
+                                          <div className="workbench-card">
+                                            <div className="card-header-row">
+                                              <h3 className="card-title">
+                                                <span className="card-title-icon">➕</span>
+                                                <span>New Scheduled Autonomous Analysis</span>
+                                              </h3>
+                                            </div>
+
+                                            <form onSubmit={onCreateSchedule} className="clean-vertical-form">
+                                              <div className="form-field-block">
+                                                <label className="field-label" htmlFor="schedule-name-input">
+                                                  Schedule Name
+                                                </label>
+                                                <input
+                                                  id="schedule-name-input"
+                                                  className="field-input"
+                                                  value={scheduleName}
+                                                  onChange={e => onScheduleNameChange(e.target.value)}
+                                                  placeholder="e.g. Weekly Category Revenue Review"
+                                                  required
+                                                />
+                                              </div>
+
+                                                <div className="form-field-block">
+                                                  <label className="field-label" htmlFor="schedule-query-input">
+                                                    Analytical Business Question / Prompt
+                                                  </label>
+                                                  <textarea
+                                                    id="schedule-query-input"
+                                                    className="field-textarea"
+                                                    rows={3}
+                                                    value={scheduleQuery}
+                                                    onChange={e => onScheduleQueryChange(e.target.value)}
+                                                    placeholder="e.g. Analyze gross revenue, payment statuses, and identify discount anomalies across regions"
+                                                    required
+                                                  />
+                                                </div>
+
+                                                    <div className="form-grid-row">
+                                                      <div className="form-field-block">
+                                                        <label className="field-label" htmlFor="schedule-type-select">
+                                                          Schedule Type
+                                                        </label>
+                                                        <select
+                                                          id="schedule-type-select"
+                                                          className="field-select"
+                                                          value={scheduleType}
+                                                          onChange={e => onScheduleTypeChange(e.target.value as any)}
+                                                        >
+                                                          <option value="recurring">Recurring (Cron Schedule)</option>
+                                                          <option value="one_time">One-Time Future Execution</option>
+                                                        </select>
+                                                      </div>
+
+                                                        <div className="form-field-block">
+                                                          <label className="field-label" htmlFor="schedule-tz-input">
+                                                            IANA Timezone
+                                                          </label>
+                                                          <input
+                                                            id="schedule-tz-input"
+                                                            className="field-input"
+                                                            value={scheduleTimezone}
+                                                            onChange={e => onScheduleTimezoneChange(e.target.value)}
+                                                            placeholder="America/New_York or UTC"
+                                                            required
+                                                          />
+                                                        </div>
+                                                      </div>
+
+                                                      {scheduleType === 'recurring' ? (
+                                                          <div className="form-field-block">
+                                                            <label className="field-label" htmlFor="schedule-cron-input">
+                                                              5-Field Cron Expression
+                                                            </label>
+                                                            <input
+                                                              id="schedule-cron-input"
+                                                              className="field-input"
+                                                              value={scheduleCron}
+                                                              onChange={e => onScheduleCronChange(e.target.value)}
+                                                              placeholder="0 9 * * 1 (Every Monday at 9:00 AM)"
+                                                              required
+                                                            />
+                                                            <span className="field-hint">Standard cron format: minute hour day-of-month month day-of-week</span>
+                                                          </div>
+                                                          ) : (
+                                                            <div className="form-field-block">
+                                                              <label className="field-label" htmlFor="schedule-onetime-input">
+                                                                Run Timestamp
+                                                              </label>
+                                                              <input
+                                                                id="schedule-onetime-input"
+                                                                className="field-input"
+                                                                type="datetime-local"
+                                                                value={scheduleOneTimeAt}
+                                                                onChange={e => onScheduleOneTimeAtChange(new Date(e.target.value).toISOString())}
+                                                                required
+                                                              />
+                                                            </div>
+              )}
+
+                                                            <div className="form-actions-row">
+                                                              <button className="btn-primary" type="submit">
+                                                                Create Schedule
+                                                              </button>
+                                                            </div>
+                                                          </form>
+                                                        </div>
+        </div>
+
+                                                        {/* Right Column: Delivery Channels & Superset BI */}
+                                                        <div className="schedules-right-column">
+                                                          {/* Delivery Channels Card */}
+                                                          <div className="workbench-card">
+                                                            <div className="card-header-row">
+                                                              <h3 className="card-title">
+                                                                <span className="card-title-icon">📬</span>
+                                                                <span>Report Delivery Channels</span>
+                                                              </h3>
+                                                            </div>
+
+                                                            {deliveryDestinations.length === 0 ? (
+              <div className="empty-state-notice">
+                <p>No delivery destinations yet. Add an email or webhook destination below.</p>
+              </div>
+                                                            ) : (
+                                                                <div className="destinations-list">
+                                                                  {deliveryDestinations.map(d => (
+                                                                          <div key={d.id} className="destination-item-card">
+                                                                            <div className="dest-item-info">
+                                                                              <div className="dest-name-row">
+                                                                                <strong className="dest-name">{d.name}</strong>
+                                                                                <span className="dest-type-badge">{d.destinationType}</span>
+                                                                              </div>
+                                                                              <div className="dest-target-text">
+                                                                                {d.recipientEmails || d.webhookUrl}
+                                                                              </div>
+                                                                            </div>
+                                                                            <button
+                                                                              className="btn-action-danger"
+                                                                              onClick={() => onDeleteDeliveryDestination(d.id)}
+                                                                              title="Remove destination"
+                                                                            >
+                                                                              ✕
+                                                                            </button>
+                                                                          </div>
+                ))}
+                                                                        </div>
             )}
 
-            <form onSubmit={onCreateDeliveryDestination}>
-              <div className="form-group">
-                <input
-                  className="form-input"
-                  placeholder="Destination Name"
-                  value={destName}
-                  onChange={e => onDestNameChange(e.target.value)}
-                  required
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                <label style={{ fontSize: '0.85rem' }}>
-                  <input
-                    type="radio"
-                    name="destType"
-                    checked={destType === 'email'}
-                    onChange={() => onDestTypeChange('email')}
-                  /> Email
-                </label>
-                <label style={{ fontSize: '0.85rem' }}>
-                  <input
-                    type="radio"
-                    name="destType"
-                    checked={destType === 'webhook'}
-                    onChange={() => onDestTypeChange('webhook')}
-                  /> Webhook
-                </label>
-              </div>
+                                                                            <form onSubmit={onCreateDeliveryDestination} className="clean-vertical-form" style={{ marginTop: 16 }}>
+                                                                              <div className="form-field-block">
+                                                                                <label className="field-label">Channel Name</label>
+                                                                                <input
+                                                                                  className="field-input"
+                                                                                  placeholder="e.g. Executive Leadership List"
+                                                                                  value={destName}
+                                                                                  onChange={e => onDestNameChange(e.target.value)}
+                                                                                  required
+                                                                                />
+                                                                              </div>
 
-              {destType === 'email' ? (
-                <div className="form-group">
-                  <input
-                    className="form-input"
-                    placeholder="recipients@company.com"
-                    value={destEmail}
-                    onChange={e => onDestEmailChange(e.target.value)}
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="form-group">
-                  <input
-                    className="form-input"
-                    placeholder="https://hooks.slack.com/..."
-                    value={destWebhook}
-                    onChange={e => onDestWebhookChange(e.target.value)}
-                    required
-                  />
-                </div>
+                                                                                <div className="form-field-block">
+                                                                                  <label className="field-label">Channel Type</label>
+                                                                                  <div className="radio-options-row">
+                                                                                    <label className={`radio-pill ${destType === 'email' ? 'active' : ''}`}>
+                                                                                      <input
+                                                                                        type="radio"
+                                                                                        name="destType"
+                                                                                        checked={destType === 'email'}
+                                                                                        onChange={() => onDestTypeChange('email')}
+                                                                                      />
+                                                                                      <span>✉️ Email</span>
+                                                                                    </label>
+                                                                                    <label className={`radio-pill ${destType === 'webhook' ? 'active' : ''}`}>
+                                                                                      <input
+                                                                                        type="radio"
+                                                                                        name="destType"
+                                                                                        checked={destType === 'webhook'}
+                                                                                        onChange={() => onDestTypeChange('webhook')}
+                                                                                      />
+                                                                                      <span>🔗 Webhook</span>
+                                                                                    </label>
+                                                                                  </div>
+                                                                                </div>
+
+                                                                                {destType === 'email' ? (
+                                                                                    <div className="form-field-block">
+                                                                                      <label className="field-label">Recipient Emails</label>
+                                                                                      <input
+                                                                                        className="field-input"
+                                                                                        placeholder="executive@company.com, analyst@company.com"
+                                                                                        value={destEmail}
+                                                                                        onChange={e => onDestEmailChange(e.target.value)}
+                                                                                        required
+                                                                                      />
+                                                                                    </div>
+                                                                                    ) : (
+                                                                                      <div className="form-field-block">
+                                                                                        <label className="field-label">Webhook URL</label>
+                                                                                        <input
+                                                                                          className="field-input"
+                                                                                          placeholder="https://hooks.slack.com/services/..."
+                                                                                          value={destWebhook}
+                                                                                          onChange={e => onDestWebhookChange(e.target.value)}
+                                                                                          required
+                                                                                        />
+                                                                                      </div>
               )}
-              <button className="btn-secondary" type="submit" style={{ width: '100%' }}>
-                + Add Delivery Destination
-              </button>
-            </form>
-          </div>
 
-          {/* BI Platform Integrations */}
-          <div className="kpi-card" style={{ padding: 24 }}>
-            <h3 style={{ marginBottom: 12, fontSize: '1.1rem' }}>📊 Apache Superset BI Connection</h3>
-            {biConnections.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No BI connections configured yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {biConnections.map(c => (
-                  <div
-                    key={c.id}
-                    style={{
-                      padding: 10,
-                      borderRadius: 6,
-                      background: 'var(--bg-secondary)',
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong>{c.name}</strong>
-                      <span className={`role-pill role-${c.status === 'connected' ? 'admin' : 'viewer'}`}>
-                        {c.status}
-                      </span>
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: 2 }}>
-                      {c.hostUrl}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button
-                        className="btn-secondary"
-                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                        onClick={() => onTestBiConnection(c.id)}
-                      >
-                        Test Connection
-                      </button>
-                      <button
-                        className="btn-secondary"
-                        style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#ff6b6b' }}
-                        onClick={() => onDeleteBiConnection(c.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    {biTestMsg && (
-                      <div style={{ marginTop: 6, fontSize: '0.75rem', color: 'var(--accent-color)' }}>
-                        {biTestMsg}
-                      </div>
+                                                                                        <button className="btn-secondary" type="submit" style={{ width: '100%', marginTop: 4 }}>
+                                                                                          + Add Delivery Channel
+                                                                                        </button>
+                                                                                      </form>
+                                                                                    </div>
+
+                                                                                      {/* Apache Superset BI Connection Card */}
+                                                                                      <div className="workbench-card">
+                                                                                        <div className="card-header-row">
+                                                                                          <h3 className="card-title">
+                                                                                            <span className="card-title-icon">📊</span>
+                                                                                            <span>Apache Superset BI Connection</span>
+                                                                                          </h3>
+                                                                                        </div>
+
+                                                                                        {biConnections.length === 0 ? (
+              <div className="empty-state-notice">
+                <p>No BI connections configured yet. Connect your Apache Superset cluster below.</p>
+              </div>
+                                                                                        ) : (
+                                                                                            <div className="bi-connections-list">
+                                                                                              {biConnections.map(c => (
+                                                                                                    <div key={c.id} className="bi-connection-card">
+                                                                                                      <div className="bi-conn-header">
+                                                                                                        <strong>{c.name}</strong>
+                                                                                                          <span className={`status-pill ${c.status === 'connected' ? 'status-healthy' : 'status-warning'}`}>
+                                                                                                            {c.status.toUpperCase()}
+                                                                                                          </span>
+                                                                                                      </div>
+                                                                                                        <div className="bi-conn-host">{c.hostUrl}</div>
+                                                                                                        <div className="bi-conn-actions">
+                                                                                                          <button
+                                                                                                            className="btn-action-primary"
+                                                                                                            onClick={() => onTestBiConnection(c.id)}
+                                                                                                          >
+                                                                                                            Test Connection
+                                                                                                          </button>
+                                                                                                          <button
+                                                                                                            className="btn-action-danger"
+                                                                                                            onClick={() => onDeleteBiConnection(c.id)}
+                                                                                                          >
+                                                                                                            Delete
+                                                                                                          </button>
+                                                                                                        </div>
+                                                                                                        {biTestMsg && (
+                                                                                                            <div className="bi-test-status-msg">
+                                                                                                              {biTestMsg}
+                                                                                                            </div>
                     )}
-                  </div>
-                ))}
-              </div>
+                                                                                                          </div>
+                                                                                                        ))}
+                                                                                                      </div>
             )}
 
-            <form onSubmit={onCreateBiConnection}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.8rem' }}>Superset Host URL</label>
-                <input
-                  className="form-input"
-                  value={biHost}
-                  onChange={e => onBiHostChange(e.target.value)}
-                  required
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Username</label>
-                  <input
-                    className="form-input"
-                    value={biUser}
-                    onChange={e => onBiUserChange(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Password</label>
-                  <input
-                    className="form-input"
-                    type="password"
-                    value={biPass}
-                    onChange={e => onBiPassChange(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <button className="btn-secondary" type="submit" style={{ width: '100%' }}>
-                + Connect Apache Superset
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+                                                                                                          <form onSubmit={onCreateBiConnection} className="clean-vertical-form" style={{ marginTop: 16 }}>
+                                                                                                            <div className="form-field-block">
+                                                                                                              <label className="field-label">Superset Host URL</label>
+                                                                                                              <input
+                                                                                                                className="field-input"
+                                                                                                                value={biHost}
+                                                                                                                onChange={e => onBiHostChange(e.target.value)}
+                                                                                                                placeholder="http://localhost:8088"
+                                                                                                                required
+                                                                                                              />
+                                                                                                            </div>
+
+                                                                                                                <div className="form-grid-row">
+                                                                                                                  <div className="form-field-block">
+                                                                                                                    <label className="field-label">Username</label>
+                                                                                                                    <input
+                                                                                                                      className="field-input"
+                                                                                                                      value={biUser}
+                                                                                                                      onChange={e => onBiUserChange(e.target.value)}
+                                                                                                                      required
+                                                                                                                    />
+                                                                                                                  </div>
+                                                                                                                    <div className="form-field-block">
+                                                                                                                      <label className="field-label">Password</label>
+                                                                                                                      <input
+                                                                                                                        className="field-input"
+                                                                                                                        type="password"
+                                                                                                                        value={biPass}
+                                                                                                                        onChange={e => onBiPassChange(e.target.value)}
+                                                                                                                        required
+                                                                                                                      />
+                                                                                                                    </div>
+                                                                                                                  </div>
+
+                                                                                                                    <button className="btn-secondary" type="submit" style={{ width: '100%', marginTop: 4 }}>
+                                                                                                                      + Connect Apache Superset
+                                                                                                                    </button>
+                                                                                                                  </form>
+                                                                                                                </div>
+                                                                                                              </div>
+                                                                                                            </div>
+                                                                                                          </section>
+                                                                                                          );
 };
