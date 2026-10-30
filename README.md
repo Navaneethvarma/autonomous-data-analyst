@@ -1,4 +1,4 @@
-# Autonomous Data Analyst
+# STATA Data Analyst
 
 A production-oriented, TypeScript-based Autonomous Data Analyst built on the [Mastra](https://mastra.ai) agent framework. The system is designed to progressively inspect datasets, understand schemas, plan analytical investigations, execute safe SQL, run statistical analyses, detect anomalies, generate charts, validate results, and produce reproducible reports.
 
