@@ -35,6 +35,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               src="/stata-logo.png"
               alt="STATA Analytical Workbench"
               className="auth-logo-img"
+              style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '12px', backgroundColor: '#0f172a', padding: '6px', margin: '0 auto 10px auto', display: 'block' }}
             />
             <h1 className="auth-brand-title">STATA</h1>
             <p className="auth-brand-subtitle">Analytical Workbench</p>
