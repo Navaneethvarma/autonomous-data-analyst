@@ -41,10 +41,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="sidebar-brand">
         <div className="brand-badge">
           <img
-            src="/stata-logo.png"
+            src="/stata-icon.png"
             alt="STATA Logo"
             className="brand-logo-img"
-            style={{ width: '36px', height: '36px', minWidth: '36px', objectFit: 'contain', borderRadius: '8px', backgroundColor: '#0f172a', padding: '3px', flexShrink: 0 }}
+            style={{ width: '36px', height: '36px', minWidth: '36px', objectFit: 'contain', background: 'transparent', flexShrink: 0 }}
           />
           <div className="brand-text-block">
             <div className="brand-name">STATA</div>
