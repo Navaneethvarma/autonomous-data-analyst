@@ -32,7 +32,16 @@ import {
 } from './helpers.js';
 import { dispatchRoutes } from './routes/index.js';
 
-export type { ServerRepositories, ServerServices, ServerInstance, RequestContext } from './types.js';
+export {
+  HttpMethod,
+  HttpStatus,
+  ApiRoute,
+  type ServerRepositories,
+  type ServerServices,
+  type ServerInstance,
+  type RequestContext,
+  type RouteHandler,
+} from './types.js';
 
 export function createAppServer(options?: {
   db?: DatabaseAdapter;

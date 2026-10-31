@@ -1,59 +1,62 @@
 import type { UserRole } from '../../types/user.types.js';
 
-export type Permission =
-  | 'dataset:read'
-  | 'dataset:upload'
-  | 'dataset:delete'
-  | 'analysis:read'
-  | 'analysis:create'
-  | 'analysis:cancel'
-  | 'artifact:download'
-  | 'org:manage_members'
-  | 'schedule:read'
-  | 'schedule:manage'
-  | 'delivery:read'
-  | 'delivery:manage'
-  | 'bi:read'
-  | 'bi:manage';
+export enum Permission {
+  DATASET_READ = 'dataset:read',
+  DATASET_UPLOAD = 'dataset:upload',
+  DATASET_DELETE = 'dataset:delete',
+  ANALYSIS_READ = 'analysis:read',
+  ANALYSIS_CREATE = 'analysis:create',
+  ANALYSIS_CANCEL = 'analysis:cancel',
+  ARTIFACT_DOWNLOAD = 'artifact:download',
+  ORG_MANAGE_MEMBERS = 'org:manage_members',
+  SCHEDULE_READ = 'schedule:read',
+  SCHEDULE_MANAGE = 'schedule:manage',
+  DELIVERY_READ = 'delivery:read',
+  DELIVERY_MANAGE = 'delivery:manage',
+  BI_READ = 'bi:read',
+  BI_MANAGE = 'bi:manage',
+}
 
-const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
-  admin: new Set<Permission>([
-    'dataset:read',
-    'dataset:upload',
-    'dataset:delete',
-    'analysis:read',
-    'analysis:create',
-    'analysis:cancel',
-    'artifact:download',
-    'org:manage_members',
-    'schedule:read',
-    'schedule:manage',
-    'delivery:read',
-    'delivery:manage',
-    'bi:read',
-    'bi:manage',
+export type PermissionInput = Permission | `${Permission}`;
+
+const ROLE_PERMISSIONS: Record<UserRole, Set<Permission | string>> = {
+  admin: new Set<Permission | string>([
+    Permission.DATASET_READ,
+    Permission.DATASET_UPLOAD,
+    Permission.DATASET_DELETE,
+    Permission.ANALYSIS_READ,
+    Permission.ANALYSIS_CREATE,
+    Permission.ANALYSIS_CANCEL,
+    Permission.ARTIFACT_DOWNLOAD,
+    Permission.ORG_MANAGE_MEMBERS,
+    Permission.SCHEDULE_READ,
+    Permission.SCHEDULE_MANAGE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_MANAGE,
+    Permission.BI_READ,
+    Permission.BI_MANAGE,
   ]),
-  analyst: new Set<Permission>([
-    'dataset:read',
-    'dataset:upload',
-    'analysis:read',
-    'analysis:create',
-    'analysis:cancel',
-    'artifact:download',
-    'schedule:read',
-    'schedule:manage',
-    'delivery:read',
-    'delivery:manage',
-    'bi:read',
-    'bi:manage',
+  analyst: new Set<Permission | string>([
+    Permission.DATASET_READ,
+    Permission.DATASET_UPLOAD,
+    Permission.ANALYSIS_READ,
+    Permission.ANALYSIS_CREATE,
+    Permission.ANALYSIS_CANCEL,
+    Permission.ARTIFACT_DOWNLOAD,
+    Permission.SCHEDULE_READ,
+    Permission.SCHEDULE_MANAGE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_MANAGE,
+    Permission.BI_READ,
+    Permission.BI_MANAGE,
   ]),
-  viewer: new Set<Permission>([
-    'dataset:read',
-    'analysis:read',
-    'artifact:download',
-    'schedule:read',
-    'delivery:read',
-    'bi:read',
+  viewer: new Set<Permission | string>([
+    Permission.DATASET_READ,
+    Permission.ANALYSIS_READ,
+    Permission.ARTIFACT_DOWNLOAD,
+    Permission.SCHEDULE_READ,
+    Permission.DELIVERY_READ,
+    Permission.BI_READ,
   ]),
 };
 
@@ -83,14 +86,14 @@ export class AuthenticationRequiredError extends AuthorizationError {
 /**
  * Checks whether a user role has the required permission.
  */
-export function hasPermission(role: UserRole, permission: Permission): boolean {
+export function hasPermission(role: UserRole, permission: Permission | `${Permission}`): boolean {
   return ROLE_PERMISSIONS[role]?.has(permission) ?? false;
 }
 
 /**
  * Enforces permission check, throwing AuthorizationError if unauthorized.
  */
-export function assertPermission(role: UserRole, permission: Permission): void {
+export function assertPermission(role: UserRole, permission: Permission | `${Permission}`): void {
   if (!hasPermission(role, permission)) {
     throw new AuthorizationError(
       `Access denied: role '${role}' lacks required permission '${permission}'.`

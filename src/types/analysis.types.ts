@@ -2,13 +2,20 @@
  * Analysis domain, job queue payloads, and artifact persistence types.
  */
 
-export type AnalysisJobStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'partial_success';
+export enum AnalysisJobStatus {
+  QUEUED = 'queued',
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  CANCELLED = 'cancelled',
+  PARTIAL_SUCCESS = 'partial_success',
+}
+
+export type AnalysisJobStatusType = AnalysisJobStatus | `${AnalysisJobStatus}`;
+
+export enum AnalysisAction {
+  CANCEL = 'cancel',
+}
 
 export interface AnalysisRecord {
   id: string;
@@ -17,7 +24,7 @@ export interface AnalysisRecord {
   datasetId: string;
   userQuery: string;
   jobId: string;
-  status: AnalysisJobStatus;
+  status: AnalysisJobStatus | `${AnalysisJobStatus}`;
   stage: string;
   progressPercent: number;
   executionResultJson?: string | null;

@@ -1,8 +1,12 @@
-import type { RouteHandler } from '../types.js';
+import { type RouteHandler, HttpMethod, HttpStatus, ApiRoute } from '../types.js';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
-import { assertPermission, assertTenantScope } from '../../lib/auth/rbac.js';
+import { Permission, assertPermission, assertTenantScope } from '../../lib/auth/rbac.js';
+import { AnalysisJobStatus, AnalysisAction } from '../../types/analysis.types.js';
+
+const ANALYSIS_DETAIL_PATTERN = new RegExp(`^${ApiRoute.ANALYSES}/([a-zA-Z0-9_\\-]+)(?:/([a-zA-Z0-9_\\-]+))?$`);
+const ARTIFACT_DETAIL_PATTERN = new RegExp(`^${ApiRoute.ARTIFACTS}/([a-zA-Z0-9_\\-]+)$`);
 
 export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
   const { req, res, pathname, repositories, services, parseJsonBody, getAuthContext, sendJson } = ctx;
@@ -12,13 +16,13 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
   // =========================================================================
   // ANALYSES
   // =========================================================================
-  if (pathname === '/api/analyses' && req.method === 'POST') {
+  if (pathname === ApiRoute.ANALYSES && req.method === HttpMethod.POST) {
     const auth = await getAuthContext();
-    assertPermission(auth.role, 'analysis:create');
+    assertPermission(auth.role, Permission.ANALYSIS_CREATE);
     const body = await parseJsonBody();
 
     if (!body.datasetId || !body.userQuery) {
-      sendJson(400, { error: 'datasetId and userQuery are required' });
+      sendJson(HttpStatus.BAD_REQUEST, { error: 'datasetId and userQuery are required' });
       return true;
     }
 
@@ -31,11 +35,11 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
       a =>
         a.datasetId === dataset.id &&
         a.userQuery.trim().toLowerCase() === body.userQuery.trim().toLowerCase() &&
-        (a.status === 'queued' || a.status === 'running')
+        (a.status === AnalysisJobStatus.QUEUED || a.status === AnalysisJobStatus.RUNNING)
     );
 
     if (activeDuplicate) {
-      sendJson(200, {
+      sendJson(HttpStatus.OK, {
         analysisId: activeDuplicate.id,
         jobId: activeDuplicate.jobId,
         status: activeDuplicate.status,
@@ -53,8 +57,8 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
       datasetId: dataset.id,
       userQuery: body.userQuery.trim(),
       jobId: 'pending',
-      status: 'queued',
-      stage: 'queued',
+      status: AnalysisJobStatus.QUEUED,
+      stage: AnalysisJobStatus.QUEUED,
       progressPercent: 0,
       retryCount: 0,
     });
@@ -72,51 +76,51 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
       jobId = submission.jobId;
     } catch (queueErr: any) {
       await analysisRepo.update(analysisId, {
-        status: 'failed',
-        stage: 'failed',
+        status: AnalysisJobStatus.FAILED,
+        stage: AnalysisJobStatus.FAILED,
         errorMessage: `Queue submission failed: ${queueErr.message}`,
         errorCategory: 'infrastructure',
       });
-      sendJson(503, {
+      sendJson(HttpStatus.SERVICE_UNAVAILABLE, {
         error: 'Operational Failure: Background job queue was unable to accept this analysis. Please retry.',
         analysisId,
       });
       return true;
     }
 
-    sendJson(202, {
+    sendJson(HttpStatus.ACCEPTED, {
       analysisId,
       jobId,
-      status: 'queued',
+      status: AnalysisJobStatus.QUEUED,
       message: 'Analysis job submitted successfully.',
     });
     return true;
   }
 
-  if (pathname === '/api/analyses' && req.method === 'GET') {
+  if (pathname === ApiRoute.ANALYSES && req.method === HttpMethod.GET) {
     const auth = await getAuthContext();
-    assertPermission(auth.role, 'analysis:read');
+    assertPermission(auth.role, Permission.ANALYSIS_READ);
     const analyses = await analysisRepo.listForOrganization(auth.organization.id);
-    sendJson(200, analyses);
+    sendJson(HttpStatus.OK, analyses);
     return true;
   }
 
-  const analysisMatch = pathname.match(/^\/api\/analyses\/([a-zA-Z0-9_\-]+)(?:\/([a-zA-Z0-9_\-]+))?$/);
+  const analysisMatch = pathname.match(ANALYSIS_DETAIL_PATTERN);
   if (analysisMatch && analysisMatch[1]) {
     const analysisId = analysisMatch[1];
     const subResource = analysisMatch[2];
     const auth = await getAuthContext();
-    assertPermission(auth.role, 'analysis:read');
+    assertPermission(auth.role, Permission.ANALYSIS_READ);
 
     const analysis = await analysisRepo.findById(analysisId, auth.organization.id);
     if (!analysis) {
-      sendJson(404, { error: 'Analysis not found' });
+      sendJson(HttpStatus.NOT_FOUND, { error: 'Analysis not found' });
       return true;
     }
     assertTenantScope(auth.organization.id, analysis.organizationId, 'Analysis');
 
-    if (!subResource && req.method === 'GET') {
-      sendJson(200, {
+    if (!subResource && req.method === HttpMethod.GET) {
+      sendJson(HttpStatus.OK, {
         ...analysis,
         executionResult: analysis.executionResultJson ? JSON.parse(analysis.executionResultJson) : null,
         validationResult: analysis.validationResultJson ? JSON.parse(analysis.validationResultJson) : null,
@@ -126,10 +130,10 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
       return true;
     }
 
-    if (subResource === 'cancel' && req.method === 'POST') {
-      assertPermission(auth.role, 'analysis:cancel');
+    if (subResource === AnalysisAction.CANCEL && req.method === HttpMethod.POST) {
+      assertPermission(auth.role, Permission.ANALYSIS_CANCEL);
       const cancelled = await queue.cancelJob(analysis.jobId, auth.organization.id);
-      sendJson(200, { success: cancelled, message: 'Analysis cancellation initiated' });
+      sendJson(HttpStatus.OK, { success: cancelled, message: 'Analysis cancellation initiated' });
       return true;
     }
   }
@@ -137,15 +141,15 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
   // =========================================================================
   // ARTIFACTS
   // =========================================================================
-  const artifactMatch = pathname.match(/^\/api\/artifacts\/([a-zA-Z0-9_\-]+)$/);
-  if (artifactMatch && artifactMatch[1] && req.method === 'GET') {
+  const artifactMatch = pathname.match(ARTIFACT_DETAIL_PATTERN);
+  if (artifactMatch && artifactMatch[1] && req.method === HttpMethod.GET) {
     const artifactId = artifactMatch[1];
     const auth = await getAuthContext();
-    assertPermission(auth.role, 'artifact:download');
+    assertPermission(auth.role, Permission.ARTIFACT_DOWNLOAD);
 
     const artifact = await analysisRepo.getArtifactById(artifactId, auth.organization.id);
     if (!artifact) {
-      sendJson(404, { error: 'Artifact not found' });
+      sendJson(HttpStatus.NOT_FOUND, { error: 'Artifact not found' });
       return true;
     }
     assertTenantScope(auth.organization.id, artifact.organizationId, 'Artifact');
@@ -153,7 +157,7 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
     if (artifact.storagePath.startsWith('db://')) {
       const analysis = await analysisRepo.findById(artifact.analysisId, auth.organization.id);
       if (analysis && analysis.dashboardSpecJson) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(HttpStatus.OK, { 'Content-Type': 'application/json' });
         res.end(analysis.dashboardSpecJson);
         return true;
       }
@@ -167,12 +171,12 @@ export const handleAnalysisRoutes: RouteHandler = async (ctx) => {
       normalizedPath.startsWith(reportsDir) || normalizedPath.startsWith(datasetsDir);
 
     if (!isAuthorizedLocation || !fs.existsSync(normalizedPath)) {
-      sendJson(404, { error: 'Artifact file not found or inaccessible.' });
+      sendJson(HttpStatus.NOT_FOUND, { error: 'Artifact file not found or inaccessible.' });
       return true;
     }
 
     const fileContent = fs.readFileSync(normalizedPath);
-    res.writeHead(200, {
+    res.writeHead(HttpStatus.OK, {
       'Content-Type': artifact.mimeType,
       'Content-Length': fileContent.length,
       'Content-Disposition': `inline; filename="${artifact.fileName}"`,

@@ -20,6 +20,47 @@ import type { SchedulerDaemon } from '../lib/scheduler/daemon.js';
 import type { DeliveryService } from '../lib/delivery/service.js';
 import type { BiIntegrationService } from '../lib/bi/service.js';
 
+export enum HttpMethod {
+  GET = 'GET',
+  POST = 'POST',
+  PUT = 'PUT',
+  PATCH = 'PATCH',
+  DELETE = 'DELETE',
+  OPTIONS = 'OPTIONS',
+  HEAD = 'HEAD',
+}
+
+export enum HttpStatus {
+  OK = 200,
+  CREATED = 201,
+  ACCEPTED = 202,
+  NO_CONTENT = 204,
+  BAD_REQUEST = 400,
+  UNAUTHORIZED = 401,
+  FORBIDDEN = 403,
+  NOT_FOUND = 404,
+  CONFLICT = 409,
+  INTERNAL_SERVER_ERROR = 500,
+  SERVICE_UNAVAILABLE = 503,
+}
+
+export enum ApiRoute {
+  HEALTH = '/api/health',
+  AUTH_REGISTER = '/api/auth/register',
+  AUTH_LOGIN = '/api/auth/login',
+  AUTH_LOGOUT = '/api/auth/logout',
+  AUTH_ME = '/api/auth/me',
+  AUTH_MEMBERS = '/api/auth/members',
+  DATASETS = '/api/datasets',
+  DATASETS_UPLOAD = '/api/datasets/upload',
+  ANALYSES = '/api/analyses',
+  ARTIFACTS = '/api/artifacts',
+  SCHEDULES = '/api/schedules',
+  DELIVERY_DESTINATIONS = '/api/delivery/destinations',
+  BI_CONNECTIONS = '/api/bi/connections',
+  AUDIT_LOGS = '/api/audit/logs',
+}
+
 export interface ServerRepositories {
   user: UserRepository;
   organization: OrganizationRepository;
